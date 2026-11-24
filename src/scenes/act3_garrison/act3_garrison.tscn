@@ -1,0 +1,316 @@
+[gd_scene load_steps=25 format=3]
+
+[ext_resource type="Script" path="res://src/scenes/act3_garrison/act3_garrison.gd" id="1_level"]
+[ext_resource type="Script" path="res://src/scenes/act3_garrison/act3_layout.gd" id="2_layout"]
+[ext_resource type="PackedScene" path="res://src/player/player.tscn" id="3_player"]
+[ext_resource type="PackedScene" path="res://src/ai/enemy.tscn" id="4_enemy"]
+[ext_resource type="Script" path="res://src/ai/runtime_nav_region.gd" id="5_nav"]
+[ext_resource type="Script" path="res://src/interaction/safe_zone.gd" id="6_safe"]
+[ext_resource type="Script" path="res://src/interaction/interactable.gd" id="7_interact"]
+[ext_resource type="Script" path="res://src/act3/pass_check_ui.gd" id="8_passui"]
+[ext_resource type="Script" path="res://src/act3/interrogation.gd" id="9_interrogation"]
+[ext_resource type="Script" path="res://src/act3/gaze_target.gd" id="10_gaze"]
+[ext_resource type="Script" path="res://src/act3/investigator_shell.gd" id="11_shell"]
+[ext_resource type="Script" path="res://src/act3/restricted_zone.gd" id="12_restricted"]
+[ext_resource type="Script" path="res://src/story/trauma_echo.gd" id="90_echo"]
+
+[sub_resource type="Environment" id="Env_night"]
+background_mode = 1
+background_color = Color(0.015, 0.016, 0.02, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.3, 0.32, 0.38, 1)
+ambient_light_energy = 0.35
+tonemap_mode = 0
+fog_enabled = true
+fog_light_color = Color(0.12, 0.12, 0.13, 1)
+fog_density = 0.03
+
+[sub_resource type="BoxShape3D" id="Shape_dugout"]
+size = Vector3(5.2, 2.4, 8)
+
+[sub_resource type="BoxShape3D" id="Shape_forest"]
+size = Vector3(40, 4, 6)
+
+[sub_resource type="BoxShape3D" id="Shape_checkpoint"]
+size = Vector3(3.4, 2, 1.6)
+
+[sub_resource type="BoxShape3D" id="Shape_exit"]
+size = Vector3(4, 2, 2)
+
+[sub_resource type="BoxShape3D" id="Shape_yard"]
+size = Vector3(14, 2.5, 20)
+
+[sub_resource type="BoxShape3D" id="Shape_bundle"]
+size = Vector3(0.4, 0.2, 0.32)
+
+[sub_resource type="BoxMesh" id="Mesh_bundle"]
+size = Vector3(0.24, 0.04, 0.17)
+
+[sub_resource type="BoxMesh" id="Mesh_sample"]
+size = Vector3(0.15, 0.004, 0.105)
+
+[sub_resource type="StandardMaterial3D" id="Mat_paper"]
+albedo_color = Color(0.82, 0.8, 0.74, 1)
+roughness = 1.0
+
+[node name="Act3Garrison" type="Node3D"]
+script = ExtResource("1_level")
+ending_title = "Конец Акта III. Партизанский отряд"
+next_level = "res://src/scenes/epilogue/epilogue.tscn"
+night_sight = 0.75
+start_hunger = 0.15
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_night")
+
+[node name="Moon" type="DirectionalLight3D" parent="."]
+rotation = Vector3(-0.75, 0.6, 0)
+light_color = Color(0.75, 0.8, 0.9, 1)
+light_energy = 0.3
+shadow_enabled = true
+
+[node name="Navigation" type="NavigationRegion3D" parent="."]
+script = ExtResource("5_nav")
+
+[node name="Layout" type="Node3D" parent="."]
+script = ExtResource("2_layout")
+
+[node name="DugoutZone" type="Area3D" parent="."]
+position = Vector3(0, 1.2, 8)
+script = ExtResource("6_safe")
+
+[node name="Shape" type="CollisionShape3D" parent="DugoutZone"]
+shape = SubResource("Shape_dugout")
+
+[node name="ForestEdge" type="Area3D" parent="."]
+position = Vector3(6, 1, -122)
+script = ExtResource("6_safe")
+
+[node name="Shape" type="CollisionShape3D" parent="ForestEdge"]
+shape = SubResource("Shape_forest")
+
+[node name="CheckpointZone" type="Area3D" parent="."]
+position = Vector3(0, 1, -42.6)
+collision_layer = 0
+collision_mask = 2
+
+[node name="Shape" type="CollisionShape3D" parent="CheckpointZone"]
+shape = SubResource("Shape_checkpoint")
+
+[node name="ExitZone" type="Area3D" parent="."]
+position = Vector3(0, 1, -101.6)
+collision_layer = 0
+collision_mask = 2
+
+[node name="Shape" type="CollisionShape3D" parent="ExitZone"]
+shape = SubResource("Shape_exit")
+
+[node name="YardZone" type="Area3D" parent="."]
+position = Vector3(18, 1.25, -72)
+script = ExtResource("12_restricted")
+
+[node name="Shape" type="CollisionShape3D" parent="YardZone"]
+shape = SubResource("Shape_yard")
+
+[node name="Bundle" type="Area3D" parent="."]
+position = Vector3(1.55, 0.8, 9.4)
+script = ExtResource("7_interact")
+
+[node name="Mesh" type="MeshInstance3D" parent="Bundle"]
+mesh = SubResource("Mesh_bundle")
+
+[node name="Shape" type="CollisionShape3D" parent="Bundle"]
+shape = SubResource("Shape_bundle")
+
+[node name="Sample" type="MeshInstance3D" parent="."]
+transform = Transform3D(0.96, 0, 0.28, 0, 1, 0, -0.28, 0, 0.96, 1.15, 0.782, 9.35)
+mesh = SubResource("Mesh_sample")
+surface_material_override/0 = SubResource("Mat_paper")
+
+[node name="PassCheckUI" type="CanvasLayer" parent="."]
+script = ExtResource("8_passui")
+
+[node name="Interrogation" type="Node" parent="." node_paths=PackedStringArray("investigator", "shell", "seat", "details_root", "typewriter")]
+script = ExtResource("9_interrogation")
+investigator = NodePath("../OfficeScene/Investigator")
+shell = NodePath("../OfficeScene/Investigator/Visual/Shell")
+seat = NodePath("../OfficeScene/Seat")
+details_root = NodePath("../OfficeScene/Details")
+typewriter = NodePath("../OfficeScene/Details/Typewriter")
+
+[node name="OfficeScene" type="Node3D" parent="."]
+
+[node name="Seat" type="Marker3D" parent="OfficeScene"]
+position = Vector3(78.55, 1, -60)
+rotation = Vector3(0, -1.5708, 0)
+
+[node name="Details" type="Node3D" parent="OfficeScene"]
+
+[node name="Portrait" type="Marker3D" parent="OfficeScene/Details"]
+position = Vector3(82.15, 1.95, -61.2)
+script = ExtResource("10_gaze")
+radius = 0.35
+max_distance = 6.0
+
+[node name="Kettle" type="Marker3D" parent="OfficeScene/Details"]
+position = Vector3(81.3, 0.68, -58.5)
+script = ExtResource("10_gaze")
+radius = 0.2
+max_distance = 6.0
+sound_id = "kettle_lid"
+
+[node name="Typewriter" type="Marker3D" parent="OfficeScene/Details"]
+position = Vector3(80.3, 0.86, -59.55)
+script = ExtResource("10_gaze")
+radius = 0.2
+max_distance = 6.0
+sound_id = "typewriter_keys"
+
+[node name="Investigator" parent="OfficeScene" instance=ExtResource("4_enemy")]
+position = Vector3(81.3, 0, -60)
+rotation = Vector3(0, 1.5708, 0)
+kind = 3
+has_armband = true
+passive = true
+
+[node name="Shell" type="Node3D" parent="OfficeScene/Investigator/Visual"]
+script = ExtResource("11_shell")
+
+[node name="Scout" type="Node3D" parent="."]
+
+[node name="Trucks" type="Marker3D" parent="Scout"]
+position = Vector3(17.5, 1.5, -66.5)
+script = ExtResource("10_gaze")
+radius = 1.6
+dwell = 2.0
+max_distance = 26.0
+
+[node name="Drums" type="Marker3D" parent="Scout"]
+position = Vector3(21.5, 0.6, -77.8)
+script = ExtResource("10_gaze")
+radius = 0.9
+dwell = 2.0
+max_distance = 20.0
+
+[node name="GunNest" type="Marker3D" parent="Scout"]
+position = Vector3(-4.5, 0.9, -88.6)
+script = ExtResource("10_gaze")
+radius = 1.0
+dwell = 2.0
+max_distance = 22.0
+
+[node name="StreetRoute" type="Node3D" parent="."]
+
+[node name="P1" type="Marker3D" parent="StreetRoute"]
+position = Vector3(1.5, 0, -50)
+
+[node name="P2" type="Marker3D" parent="StreetRoute"]
+position = Vector3(1.5, 0, -97)
+
+[node name="SentryLeft" parent="." instance=ExtResource("4_enemy")]
+position = Vector3(-2.8, 0, -45.2)
+rotation = Vector3(0, 3.14159, 0)
+hold_position = true
+
+[node name="SentryRight" parent="." instance=ExtResource("4_enemy")]
+position = Vector3(2.8, 0, -45.2)
+rotation = Vector3(0, 3.14159, 0)
+kind = 1
+hold_position = true
+
+[node name="StreetPatrol" parent="." node_paths=PackedStringArray("patrol_route") instance=ExtResource("4_enemy")]
+position = Vector3(1.5, 0, -50)
+patrol_route = NodePath("../StreetRoute")
+walk_speed = 1.1
+
+[node name="YardGuard" parent="." instance=ExtResource("4_enemy")]
+position = Vector3(14.5, 0, -72.5)
+rotation = Vector3(0, 1.5708, 0)
+hold_position = true
+
+[node name="GunCrew" parent="." instance=ExtResource("4_enemy")]
+position = Vector3(-4.5, 0, -88.2)
+hold_position = true
+
+[node name="ExitGuard" parent="." instance=ExtResource("4_enemy")]
+position = Vector3(2.8, 0, -102.6)
+rotation = Vector3(0, 3.14159, 0)
+kind = 1
+hold_position = true
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+position = Vector3(0, 0, 10.8)
+
+[node name="Spawns" type="Node3D" parent="."]
+
+[node name="Start" type="Marker3D" parent="Spawns"]
+position = Vector3(0, 0, 10.8)
+
+[node name="Path" type="Marker3D" parent="Spawns"]
+position = Vector3(0, 0, -20)
+
+[node name="Checkpoint" type="Marker3D" parent="Spawns"]
+position = Vector3(0, 0, -39)
+
+[node name="Garrison" type="Marker3D" parent="Spawns"]
+position = Vector3(0, 0, -50)
+
+[node name="Yard" type="Marker3D" parent="Spawns"]
+position = Vector3(8.5, 0, -72)
+rotation = Vector3(0, -1.5708, 0)
+
+[node name="Exit" type="Marker3D" parent="Spawns"]
+position = Vector3(0, 0, -97)
+
+[node name="Released" type="Marker3D" parent="Spawns"]
+position = Vector3(0, 0, -106.5)
+
+[node name="Overlay" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="Fade" type="ColorRect" parent="Overlay"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Caption" type="Label" parent="Overlay"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -460.0
+offset_top = -60.0
+offset_right = 460.0
+offset_bottom = 60.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3
+
+[node name="Subtitle" type="Label" parent="Overlay"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -460.0
+offset_top = -110.0
+offset_right = 460.0
+offset_bottom = -50.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(0.92, 0.92, 0.9, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 26
+horizontal_alignment = 1
+
+[node name="TraumaEcho" type="Node" parent="."]
+script = ExtResource("90_echo")

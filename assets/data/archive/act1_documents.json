@@ -1,0 +1,99 @@
+[
+  {
+    "id": "act1_kommandantur_order",
+    "act": 1,
+    "type": "order",
+    "title": {
+      "ru": "Приказ местной комендатуры населению",
+      "de": "Bekanntmachung der Ortskommandantur"
+    },
+    "text_status": "pending",
+    "text": { "ru": "", "de": "" },
+    "archive_note": {
+      "ru": "Местные и полевые комендатуры (Ortskommandantur, Feldkommandantur) управляли тыловыми районами оккупированной территории и объявляли населению обязательные распоряжения. Подлинный текст для этой записки нужно выбрать из переведённых трофейных приказов (источники ниже) и внести дословно, с указанием архивного шифра."
+    },
+    "related": ["ref_jurisdiction_decree_1941", "ref_chgk"],
+    "sources": [
+      {
+        "title": "Дело № 93: переведённые трофейные приказы, инструкции и памятки (ЦАМО РФ)",
+        "url": "https://wwii.germandocsinrussia.org/ru/nodes/1891-delo-93-perevedennye-trofeynye-dokumenty-o-boevyh-deystviyah-nemetskih-voysk-prikazy-instruktsii-pisma-pamyatki-o-politicheskih-zadachah-nemetskih-soldat-na-vostoke"
+      },
+      {
+        "title": "Российско-германский проект по оцифровке германских документов",
+        "url": "https://germandocsinrussia.org/"
+      }
+    ]
+  },
+  {
+    "id": "act1_registration_notice",
+    "act": 1,
+    "type": "notice",
+    "title": {
+      "ru": "Объявление о регистрации жителей",
+      "de": ""
+    },
+    "text_status": "pending",
+    "text": { "ru": "", "de": "" },
+    "archive_note": {
+      "ru": "Заготовка под подлинное объявление оккупационных властей. Документ и его региональную привязку (Беларусь, Псковщина или Брянщина) выбрать в базе проекта «Без срока давности» или в проекте Росархива, затем внести текст дословно."
+    },
+    "related": ["ref_chgk"],
+    "sources": [
+      {
+        "title": "«Без срока давности»: онлайн-база архивных документов",
+        "url": "https://xn--90ag.xn--80aabgieomn8afgsnjq.xn--p1ai/"
+      },
+      {
+        "title": "Росархив: «Преступления нацистов и их пособников против мирного населения СССР»",
+        "url": "http://victims.rusarchives.ru"
+      }
+    ]
+  },
+  {
+    "id": "ref_jurisdiction_decree_1941",
+    "type": "reference",
+    "date": "1941-05-13",
+    "title": {
+      "ru": "Указ «О военной подсудности в районе „Барбаросса“ и об особых полномочиях войск»",
+      "de": "Erlass über die Ausübung der Kriegsgerichtsbarkeit im Gebiet „Barbarossa“ und über besondere Maßnahmen der Truppe"
+    },
+    "archive_note": {
+      "ru": "Подписан 13 мая 1941 года, до нападения на СССР. Выводил дела о действиях гражданского населения из ведения военных судов: заподозренных в сопротивлении предписывалось уничтожать без суда по решению офицера, против населённых пунктов допускались коллективные карательные меры. Преследование военнослужащих за преступления против мирных жителей переставало быть обязательным."
+    },
+    "sources": [
+      {
+        "title": "Текст в Электронной библиотеке исторических документов (РИО)",
+        "url": "https://docs.historyrussia.org/ru/nodes/163622-rasporyazhenie-gitlera-locale-nil-o-voennoy-podsudnosti-v-rayone-locale-nil-barbarossa-locale-nil-i-ob-osobyh-polnomochiyah-voysk-locale-nil-ot-13-maya-1941-g"
+      },
+      {
+        "title": "Президентская библиотека им. Б. Н. Ельцина",
+        "url": "https://www.prlib.ru/item/1321812"
+      }
+    ]
+  },
+  {
+    "id": "ref_chgk",
+    "type": "reference",
+    "date": "1942-11-02",
+    "title": {
+      "ru": "Чрезвычайная государственная комиссия (ЧГК)"
+    },
+    "archive_note": {
+      "ru": "Создана указом Президиума Верховного Совета СССР 2 ноября 1942 года для установления и расследования злодеяний оккупантов и их сообщников. Местные комиссии после освобождения территорий составляли акты с показаниями жителей-свидетелей; материалы ЧГК использовались советским обвинением на Нюрнбергском процессе."
+    },
+    "sources": [
+      {
+        "title": "Оцифрованные дела фонда ЧГК в ГА РФ",
+        "url": "https://statearchive.ru/tests/07.html"
+      },
+      {
+        "title": "РИО публикует документы из архива о преступлениях нацистов",
+        "url": "https://historyrussia.org/sobytiya/rio-publikuet-dokumenty-iz-arkhiva-o-prestupleniyakh-natsistov-na-territorii-stran-vostochnoj-evropy.html"
+      },
+      {
+        "title": "Росархив: «Преступления нацистов и их пособников против мирного населения СССР»",
+        "url": "http://victims.rusarchives.ru"
+      }
+    ]
+  }
+]

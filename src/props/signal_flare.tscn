@@ -1,0 +1,31 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://src/props/signal_flare.gd" id="1_flare"]
+[ext_resource type="Script" path="res://src/rendering/color_mask.gd" id="2_mask"]
+
+[sub_resource type="SphereMesh" id="Mesh_star"]
+radius = 0.25
+height = 0.5
+
+[sub_resource type="StandardMaterial3D" id="Mat_star"]
+shading_mode = 0
+albedo_color = Color(1, 0.2, 0.15, 1)
+
+[node name="SignalFlare" type="Node3D"]
+script = ExtResource("1_flare")
+
+[node name="Star" type="MeshInstance3D" parent="."]
+cast_shadow = 0
+mesh = SubResource("Mesh_star")
+material_override = SubResource("Mat_star")
+
+[node name="ColorMask" type="Node" parent="Star"]
+script = ExtResource("2_mask")
+channel = 1
+tint_albedo = false
+
+[node name="Light" type="OmniLight3D" parent="Star"]
+light_color = Color(1, 0.35, 0.3, 1)
+light_energy = 0.0
+shadow_enabled = true
+omni_range = 45.0

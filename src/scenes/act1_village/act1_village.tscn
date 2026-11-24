@@ -1,0 +1,544 @@
+[gd_scene load_steps=39 format=3]
+
+[ext_resource type="Script" path="res://src/scenes/act1_village/act1_village.gd" id="1_level"]
+[ext_resource type="Script" path="res://src/props/board_floor.gd" id="bf_boards"]
+[ext_resource type="PackedScene" path="res://src/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://src/ai/enemy.tscn" id="3_enemy"]
+[ext_resource type="PackedScene" path="res://src/interaction/cellar_hatch.tscn" id="4_hatch"]
+[ext_resource type="PackedScene" path="res://src/interaction/hay_hide.tscn" id="5_hay"]
+[ext_resource type="PackedScene" path="res://src/interaction/pickup.tscn" id="6_pickup"]
+[ext_resource type="Resource" path="res://assets/data/items/bread.tres" id="7_bread"]
+[ext_resource type="Resource" path="res://assets/data/items/bandage.tres" id="8_bandage"]
+[ext_resource type="Resource" path="res://assets/data/items/doc_kommandantur_order.tres" id="9_order"]
+[ext_resource type="Resource" path="res://assets/data/items/doc_registration_notice.tres" id="10_notice"]
+[ext_resource type="PackedScene" path="res://src/props/signal_flare.tscn" id="11_flare"]
+[ext_resource type="Script" path="res://src/interaction/safe_zone.gd" id="12_safe"]
+[ext_resource type="Script" path="res://src/ai/runtime_nav_region.gd" id="13_nav"]
+[ext_resource type="PackedScene" path="res://src/ai/dog.tscn" id="14_dog"]
+[ext_resource type="PackedScene" path="res://src/props/izba_door.tscn" id="15_door"]
+[ext_resource type="Script" path="res://src/story/invasion_sequence.gd" id="16_seq"]
+[ext_resource type="Script" path="res://src/props/smoulder_smoke.gd" id="17_smoke"]
+[ext_resource type="Script" path="res://src/story/memory_flash.gd" id="18_memory"]
+[ext_resource type="Material" path="res://assets/materials/ground.tres" id="m_ground"]
+[ext_resource type="Material" path="res://assets/materials/road.tres" id="m_road"]
+[ext_resource type="Material" path="res://assets/materials/logs.tres" id="m_logs"]
+[ext_resource type="Material" path="res://assets/materials/roof.tres" id="m_roof"]
+[ext_resource type="Material" path="res://assets/materials/charred.tres" id="m_charred"]
+[ext_resource type="Material" path="res://assets/materials/stove.tres" id="m_stove"]
+[ext_resource type="Material" path="res://assets/materials/bark.tres" id="m_bark"]
+[ext_resource type="Script" path="res://src/props/wall_clock.gd" id="s_clock"]
+[ext_resource type="PackedScene" path="res://src/interaction/stove_nook.tscn" id="s_nook"]
+[ext_resource type="Script" path="res://src/audio/gunfire_ambience.gd" id="s_gunfire"]
+[ext_resource type="Script" path="res://src/props/phantom_figure.gd" id="s_phantom"]
+
+[sub_resource type="Environment" id="Env_night"]
+background_mode = 1
+background_color = Color(0.015, 0.016, 0.02, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.3, 0.32, 0.38, 1)
+ambient_light_energy = 0.35
+tonemap_mode = 0
+fog_enabled = true
+fog_light_color = Color(0.12, 0.12, 0.13, 1)
+fog_density = 0.035
+
+[sub_resource type="BoxShape3D" id="Shape_izba_inside"]
+size = Vector3(5.4, 2.6, 4.4)
+
+[sub_resource type="BoxShape3D" id="Shape_memory_zone"]
+size = Vector3(16, 3, 14)
+
+[sub_resource type="BoxMesh" id="Mesh_ghost_walls"]
+size = Vector3(5, 2.6, 4)
+
+[sub_resource type="PrismMesh" id="Mesh_ghost_roof"]
+size = Vector3(4.4, 1.5, 5.6)
+
+[sub_resource type="BoxShape3D" id="Shape_forest_zone"]
+size = Vector3(44, 4, 8)
+
+[node name="Act1Village" type="Node3D"]
+script = ExtResource("1_level")
+ending_title = "Конец Акта I. Деревня"
+next_level = "res://src/scenes/interlude_night/night_dream.tscn"
+start_hunger = 0.25
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_night")
+
+[node name="Moon" type="DirectionalLight3D" parent="."]
+rotation = Vector3(-0.75, 0.6, 0)
+light_color = Color(0.75, 0.8, 0.9, 1)
+light_energy = 0.35
+shadow_enabled = true
+
+[node name="Navigation" type="NavigationRegion3D" parent="."]
+script = ExtResource("13_nav")
+
+[node name="Ground" type="CSGBox3D" parent="."]
+position = Vector3(0, -0.5, -10)
+use_collision = true
+size = Vector3(90, 1, 90)
+material = ExtResource("m_ground")
+
+[node name="Road" type="CSGBox3D" parent="."]
+position = Vector3(6, 0.01, -10)
+size = Vector3(4, 0.02, 60)
+material = ExtResource("m_road")
+
+[node name="IzbaA" type="CSGCombiner3D" parent="." groups=["sound_walls"]]
+position = Vector3(0, 0, 6)
+use_collision = true
+
+[node name="Outer" type="CSGBox3D" parent="IzbaA"]
+position = Vector3(0, 1.4, 0)
+size = Vector3(6, 2.8, 5)
+material = ExtResource("m_logs")
+
+[node name="Inner" type="CSGBox3D" parent="IzbaA"]
+operation = 2
+position = Vector3(0, 1.3, 0)
+size = Vector3(5.6, 2.8, 4.6)
+material = ExtResource("m_logs")
+
+[node name="Door" type="CSGBox3D" parent="IzbaA"]
+operation = 2
+position = Vector3(1.5, 0.95, -2.5)
+size = Vector3(1.2, 2.1, 0.6)
+material = ExtResource("m_logs")
+
+[node name="WindowN" type="CSGBox3D" parent="IzbaA"]
+operation = 2
+position = Vector3(-1.5, 1.5, -2.5)
+size = Vector3(0.8, 0.6, 0.6)
+material = ExtResource("m_logs")
+
+[node name="WindowW" type="CSGBox3D" parent="IzbaA"]
+operation = 2
+position = Vector3(-3, 1.5, 0)
+size = Vector3(0.6, 0.6, 0.8)
+material = ExtResource("m_logs")
+
+[node name="Roof" type="CSGPolygon3D" parent="IzbaA"]
+position = Vector3(0, 2.8, 2.7)
+polygon = PackedVector2Array(-3.4, 0, 3.4, 0, 0, 1.7)
+depth = 5.4
+material = ExtResource("m_roof")
+
+[node name="Stove" type="CSGBox3D" parent="IzbaA"]
+position = Vector3(1.9, 0.9, 1.0)
+size = Vector3(1.4, 1.8, 1.4)
+material = ExtResource("m_stove")
+
+[node name="Table" type="CSGBox3D" parent="IzbaA"]
+position = Vector3(-1.4, 0.375, 1.2)
+size = Vector3(1.2, 0.75, 0.7)
+material = ExtResource("m_logs")
+
+[node name="Lamp" type="OmniLight3D" parent="IzbaA"]
+position = Vector3(-1.4, 1.2, 1.2)
+light_color = Color(1, 0.8, 0.55, 1)
+light_energy = 0.9
+shadow_enabled = true
+omni_range = 6.0
+
+[node name="CellarHatch" parent="IzbaA" instance=ExtResource("4_hatch")]
+position = Vector3(-0.6, 0, -0.6)
+
+[node name="StoveNook" parent="IzbaA" instance=ExtResource("s_nook")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2.1, 0, 2.0)
+
+[node name="Bread" parent="IzbaA" instance=ExtResource("6_pickup")]
+position = Vector3(-1.7, 0.8, 1.2)
+item = ExtResource("7_bread")
+
+[node name="RegistrationNotice" parent="IzbaA" instance=ExtResource("6_pickup")]
+position = Vector3(-1.1, 0.77, 1.15)
+item = ExtResource("10_notice")
+
+[node name="IzbaBoards" type="Node3D" parent="."]
+position = Vector3(0, 0, 6)
+script = ExtResource("bf_boards")
+size = Vector3(5.6, 1, 4.6)
+
+[node name="IzbaClock" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -1.4, 1.75, 8.26)
+script = ExtResource("s_clock")
+
+[node name="Phantoms" type="Node3D" parent="."]
+
+[node name="CoatOnPost" type="Node3D" parent="Phantoms"]
+transform = Transform3D(0.34202015, 0, -0.9396926, 0, 1, 0, 0.9396926, 0, 0.34202015, -7, 0, -1)
+script = ExtResource("s_phantom")
+
+[node name="BurntBeam" type="Node3D" parent="Phantoms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -13.5, 0, -10)
+script = ExtResource("s_phantom")
+disguise = 2
+
+[node name="Stump" type="Node3D" parent="Phantoms"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 10, 0, -26)
+script = ExtResource("s_phantom")
+disguise = 1
+
+[node name="IzbaB" type="CSGBox3D" parent="." groups=["sound_walls"]]
+position = Vector3(-9, 1.4, 8)
+use_collision = true
+size = Vector3(5, 2.8, 4.5)
+material = ExtResource("m_logs")
+
+[node name="IzbaBRoof" type="CSGPolygon3D" parent="IzbaB"]
+position = Vector3(0, 1.4, 2.45)
+polygon = PackedVector2Array(-2.9, 0, 2.9, 0, 0, 1.5)
+depth = 4.9
+material = ExtResource("m_roof")
+
+[node name="IzbaBWindowLight" type="OmniLight3D" parent="IzbaB"]
+position = Vector3(0, 0.2, -2.6)
+light_color = Color(1, 0.8, 0.55, 1)
+light_energy = 0.5
+omni_range = 3.0
+
+[node name="BurnedHouse" type="Node3D" parent="."]
+position = Vector3(-10, 0, -5)
+
+[node name="Smoke" type="CPUParticles3D" parent="BurnedHouse"]
+position = Vector3(0, 0.3, 0)
+script = ExtResource("17_smoke")
+
+[node name="Memory" type="Area3D" parent="BurnedHouse" node_paths=PackedStringArray("ghost", "focus", "present_only")]
+script = ExtResource("18_memory")
+present_only = NodePath("../Smoke")
+ghost = NodePath("Ghost")
+focus = NodePath("Focus")
+
+[node name="Shape" type="CollisionShape3D" parent="BurnedHouse/Memory"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.5, 0)
+shape = SubResource("Shape_memory_zone")
+
+[node name="Focus" type="Marker3D" parent="BurnedHouse/Memory"]
+position = Vector3(0, 1.3, 0)
+
+[node name="Ghost" type="Node3D" parent="BurnedHouse/Memory"]
+
+[node name="Walls" type="MeshInstance3D" parent="BurnedHouse/Memory/Ghost"]
+position = Vector3(0, 1.3, 0)
+mesh = SubResource("Mesh_ghost_walls")
+
+[node name="Roof" type="MeshInstance3D" parent="BurnedHouse/Memory/Ghost"]
+transform = Transform3D(0, 0, -1, 0, 1, 0, 1, 0, 0, 0, 3.35, 0)
+mesh = SubResource("Mesh_ghost_roof")
+
+[node name="Chimney" type="CSGBox3D" parent="BurnedHouse"]
+position = Vector3(0.8, 1.6, 0.6)
+use_collision = true
+size = Vector3(1.1, 3.2, 1.1)
+material = ExtResource("m_stove")
+
+[node name="WallStub1" type="CSGBox3D" parent="BurnedHouse"]
+position = Vector3(0, 0.35, -2)
+use_collision = true
+size = Vector3(5, 0.7, 0.3)
+material = ExtResource("m_charred")
+
+[node name="WallStub2" type="CSGBox3D" parent="BurnedHouse"]
+position = Vector3(-2.5, 0.25, 0)
+use_collision = true
+size = Vector3(0.3, 0.5, 4)
+material = ExtResource("m_charred")
+
+[node name="Beam" type="CSGBox3D" parent="BurnedHouse"]
+position = Vector3(0.5, 0.3, -0.6)
+rotation = Vector3(0, 0.5, 0.35)
+use_collision = true
+size = Vector3(4, 0.22, 0.22)
+material = ExtResource("m_charred")
+
+[node name="Barn" type="CSGCombiner3D" parent="." groups=["sound_walls"]]
+position = Vector3(12, 0, -4)
+use_collision = true
+
+[node name="Outer" type="CSGBox3D" parent="Barn"]
+position = Vector3(0, 1.75, 0)
+size = Vector3(6, 3.5, 5)
+material = ExtResource("m_logs")
+
+[node name="Inner" type="CSGBox3D" parent="Barn"]
+operation = 2
+position = Vector3(0, 1.65, 0)
+size = Vector3(5.6, 3.5, 4.6)
+material = ExtResource("m_logs")
+
+[node name="Gate" type="CSGBox3D" parent="Barn"]
+operation = 2
+position = Vector3(-3, 1.2, 0)
+size = Vector3(0.6, 2.5, 2.8)
+material = ExtResource("m_logs")
+
+[node name="Crate" type="CSGBox3D" parent="Barn"]
+position = Vector3(-1, 0.4, 1.6)
+size = Vector3(0.8, 0.8, 0.8)
+material = ExtResource("m_logs")
+
+[node name="HayHide" parent="Barn" instance=ExtResource("5_hay")]
+position = Vector3(1.6, 0, -1.2)
+
+[node name="Bandage" parent="Barn" instance=ExtResource("6_pickup")]
+position = Vector3(-1, 0.85, 1.6)
+item = ExtResource("8_bandage")
+
+[node name="NoticePost" type="CSGCylinder3D" parent="."]
+position = Vector3(3, 1.1, -6)
+use_collision = true
+radius = 0.12
+height = 2.2
+material = ExtResource("m_logs")
+
+[node name="KommandanturOrder" parent="NoticePost" instance=ExtResource("6_pickup")]
+position = Vector3(0, 0.45, 0.14)
+rotation = Vector3(1.5708, 0, 0)
+item = ExtResource("9_order")
+
+[node name="Forest" type="Node3D" parent="."]
+
+[node name="Tree1" type="CSGCylinder3D" parent="Forest"]
+position = Vector3(-14, 6, -30)
+use_collision = true
+radius = 0.28
+height = 12.0
+material = ExtResource("m_bark")
+
+[node name="Tree2" type="CSGCylinder3D" parent="Forest"]
+position = Vector3(-8, 6, -32)
+use_collision = true
+radius = 0.32
+height = 12.0
+material = ExtResource("m_bark")
+
+[node name="Tree3" type="CSGCylinder3D" parent="Forest"]
+position = Vector3(-3, 6, -29.5)
+use_collision = true
+radius = 0.25
+height = 12.0
+material = ExtResource("m_bark")
+
+[node name="Tree4" type="CSGCylinder3D" parent="Forest"]
+position = Vector3(2.5, 6, -33)
+use_collision = true
+radius = 0.3
+height = 12.0
+material = ExtResource("m_bark")
+
+[node name="Tree5" type="CSGCylinder3D" parent="Forest"]
+position = Vector3(9, 6, -30.5)
+use_collision = true
+radius = 0.27
+height = 12.0
+material = ExtResource("m_bark")
+
+[node name="Tree6" type="CSGCylinder3D" parent="Forest"]
+position = Vector3(15, 6, -32)
+use_collision = true
+radius = 0.33
+height = 12.0
+material = ExtResource("m_bark")
+
+[node name="Tree7" type="CSGCylinder3D" parent="Forest"]
+position = Vector3(-11, 6, -37)
+use_collision = true
+radius = 0.3
+height = 12.0
+material = ExtResource("m_bark")
+
+[node name="Tree8" type="CSGCylinder3D" parent="Forest"]
+position = Vector3(5, 6, -38)
+use_collision = true
+radius = 0.3
+height = 12.0
+material = ExtResource("m_bark")
+
+[node name="ForestEdge" type="Area3D" parent="."]
+position = Vector3(0, 1, -35)
+script = ExtResource("12_safe")
+
+[node name="Shape" type="CollisionShape3D" parent="ForestEdge"]
+shape = SubResource("Shape_forest_zone")
+
+[node name="SignalFlare" parent="." instance=ExtResource("11_flare")]
+position = Vector3(22, 0, -16)
+
+[node name="PatrolRoad" type="Node3D" parent="."]
+
+[node name="P1" type="Marker3D" parent="PatrolRoad"]
+position = Vector3(6, 0, 4)
+
+[node name="P2" type="Marker3D" parent="PatrolRoad"]
+position = Vector3(6, 0, -20)
+
+[node name="PatrolCenter" type="Node3D" parent="."]
+
+[node name="P1" type="Marker3D" parent="PatrolCenter"]
+position = Vector3(-4, 0, -8)
+
+[node name="P2" type="Marker3D" parent="PatrolCenter"]
+position = Vector3(4, 0, -10)
+
+[node name="P3" type="Marker3D" parent="PatrolCenter"]
+position = Vector3(7.5, 0, -1)
+
+[node name="P4" type="Marker3D" parent="PatrolCenter"]
+position = Vector3(-2, 0, 1.5)
+
+[node name="PatrolForest" type="Node3D" parent="."]
+
+[node name="P1" type="Marker3D" parent="PatrolForest"]
+position = Vector3(-14, 0, -23)
+
+[node name="P2" type="Marker3D" parent="PatrolForest"]
+position = Vector3(14, 0, -23)
+
+[node name="SoldierRoad" parent="." node_paths=PackedStringArray("patrol_route") instance=ExtResource("3_enemy")]
+position = Vector3(6, 0, 4)
+has_armband = true
+patrol_route = NodePath("../PatrolRoad")
+has_torch = true
+
+[node name="Shepherd" parent="." node_paths=PackedStringArray("handler") instance=ExtResource("14_dog")]
+position = Vector3(7, 0, 4)
+handler = NodePath("../SoldierRoad")
+
+[node name="Feldgendarm" parent="." node_paths=PackedStringArray("patrol_route") instance=ExtResource("3_enemy")]
+position = Vector3(-4, 0, -8)
+kind = 1
+patrol_route = NodePath("../PatrolCenter")
+
+[node name="Polizei" parent="." node_paths=PackedStringArray("patrol_route") instance=ExtResource("3_enemy")]
+position = Vector3(-14, 0, -23)
+kind = 2
+patrol_route = NodePath("../PatrolForest")
+walk_speed = 1.1
+
+[node name="IzbaDoor" parent="." instance=ExtResource("15_door")]
+position = Vector3(0.9, 0, 3.6)
+
+[node name="PrologueZone" type="Area3D" parent="."]
+position = Vector3(0, 1.3, 6)
+script = ExtResource("12_safe")
+
+[node name="Shape" type="CollisionShape3D" parent="PrologueZone"]
+shape = SubResource("Shape_izba_inside")
+
+[node name="Invasion" type="Node" parent="." node_paths=PackedStringArray("soldier", "dog", "door", "flare", "prologue_zone", "squad_start", "approach_route", "search_route", "leave_point", "dog_wait", "look_back_point")]
+script = ExtResource("16_seq")
+soldier = NodePath("../SoldierRoad")
+dog = NodePath("../Shepherd")
+door = NodePath("../IzbaDoor")
+flare = NodePath("../SignalFlare")
+prologue_zone = NodePath("../PrologueZone")
+squad_start = NodePath("SquadStart")
+approach_route = NodePath("Approach")
+search_route = NodePath("Search")
+leave_point = NodePath("LeavePoint")
+dog_wait = NodePath("DogWait")
+look_back_point = NodePath("LookBack")
+
+[node name="SquadStart" type="Marker3D" parent="Invasion"]
+position = Vector3(6, 0, 18)
+
+[node name="LeavePoint" type="Marker3D" parent="Invasion"]
+position = Vector3(6, 0, 4)
+
+[node name="DogWait" type="Marker3D" parent="Invasion"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 1.5, 0, 2.4)
+
+[node name="LookBack" type="Marker3D" parent="Invasion"]
+position = Vector3(0.4, 0, 5.6)
+rotation = Vector3(0, 2.3561945, 0)
+
+[node name="Approach" type="Node3D" parent="Invasion"]
+
+[node name="A1" type="Marker3D" parent="Invasion/Approach"]
+position = Vector3(6, 0, 2)
+
+[node name="A2" type="Marker3D" parent="Invasion/Approach"]
+position = Vector3(1.5, 0, 2.3)
+
+[node name="Search" type="Node3D" parent="Invasion"]
+
+[node name="S1" type="Marker3D" parent="Invasion/Search"]
+position = Vector3(1.5, 0, 4.6)
+
+[node name="SStove" type="Marker3D" parent="Invasion/Search"]
+position = Vector3(0.55, 0, 8.0)
+
+[node name="S2" type="Marker3D" parent="Invasion/Search"]
+position = Vector3(0.5, 0, 5.3)
+
+[node name="S3" type="Marker3D" parent="Invasion/Search"]
+position = Vector3(-1.5, 0, 6.3)
+
+[node name="S4" type="Marker3D" parent="Invasion/Search"]
+position = Vector3(-0.8, 0, 4.6)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+position = Vector3(0.5, 0, 7)
+
+[node name="Gunfire" type="Node3D" parent="."]
+script = ExtResource("s_gunfire")
+active = false
+
+[node name="East" type="Marker3D" parent="Gunfire"]
+position = Vector3(75, 0, 25)
+
+[node name="West" type="Marker3D" parent="Gunfire"]
+position = Vector3(-85, 0, 5)
+
+[node name="South" type="Marker3D" parent="Gunfire"]
+position = Vector3(10, 0, 95)
+
+[node name="Spawns" type="Node3D" parent="."]
+
+[node name="Izba" type="Marker3D" parent="Spawns"]
+position = Vector3(0.5, 0, 7)
+
+[node name="Doorway" type="Marker3D" parent="Spawns"]
+position = Vector3(1.5, 0, 3.2)
+
+[node name="Street" type="Marker3D" parent="Spawns"]
+position = Vector3(3.2, 0, -0.5)
+
+[node name="Ruin" type="Marker3D" parent="Spawns"]
+position = Vector3(-3.5, 0, -2)
+
+[node name="Center" type="Marker3D" parent="Spawns"]
+position = Vector3(0, 0, -4)
+
+[node name="ForestEdge" type="Marker3D" parent="Spawns"]
+position = Vector3(0, 0, -27)
+
+[node name="Overlay" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="Fade" type="ColorRect" parent="Overlay"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Caption" type="Label" parent="Overlay"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -400.0
+offset_top = -20.0
+offset_right = 400.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1

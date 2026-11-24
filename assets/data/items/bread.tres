@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/inventory/item_data.gd" id="1_item"]
+
+[sub_resource type="BoxMesh" id="Mesh_item"]
+size = Vector3(0.18, 0.08, 0.12)
+
+[resource]
+script = ExtResource("1_item")
+id = "bread"
+display_name = "Хлеб"
+mesh = SubResource("Mesh_item")
+document_id = ""
+stackable = true

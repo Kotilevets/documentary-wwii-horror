@@ -1,0 +1,27 @@
+# Godot 4
+.godot/
+/android/
+*.translation
+export/
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Tester builds, downloaded engines: kept locally (the folder's .gdignore stays)
+/build/*
+!/build/.gdignore
+
+# Engine bug repros: kept locally
+/docs/repro/
+
+# Python
+__pycache__/
+
+# Playtest notes for the author only (observer sheet, hypotheses): kept locally
+/docs/playtest/AUTHOR_NOTES.md
+
+# References without a clear licence (CLAUDE.md, 6.5): kept locally
+/assets/refs/*
+!/assets/refs/.gitkeep

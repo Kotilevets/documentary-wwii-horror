@@ -1,0 +1,337 @@
+{
+  "dog_bark": {
+    "files": [
+      "res://assets/audio/sfx/dog_bark_01.ogg",
+      "res://assets/audio/sfx/dog_bark_02.ogg"
+    ],
+    "placeholder": "bark",
+    "volume_db": 2.0,
+    "max_distance": 70.0,
+    "source_hint": "Freesound (CC0/CC BY), запрос: German shepherd bark, ASSETS_AND_REFS № 32"
+  },
+  "de_speech": {
+    "files": [],
+    "placeholder": "",
+    "volume_db": -2.0,
+    "max_distance": 25.0,
+    "source_hint": "Непереведённая немецкая речь: записать с носителем языка; реплики бытовые, без перевода в игре"
+  },
+  "de_shout": {
+    "files": [],
+    "placeholder": "",
+    "volume_db": 3.0,
+    "max_distance": 45.0,
+    "source_hint": "Окрик на немецком: записать с носителем языка"
+  },
+  "step_player": {
+    "files": [],
+    "placeholder": "step",
+    "volume_db": -6.0,
+    "max_distance": 20.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: шаги по снегу и грязи, ASSETS_AND_REFS № 32–33",
+    "body": true
+  },
+  "step_player_board": {
+    "files": [],
+    "placeholder": "board_light",
+    "volume_db": -6.0,
+    "max_distance": 20.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: лёгкие шаги по деревянному полу (доски, не паркет), ASSETS_AND_REFS № 32–33; обувь подростка в деревне 1941 г. — [НЕ ПОДТВЕРЖДЕНО]",
+    "body": true
+  },
+  "breath_exhale": {
+    "files": [],
+    "placeholder": "breath",
+    "volume_db": -4.0,
+    "max_distance": 12.0,
+    "source_hint": "Freesound: дыхание подростка, ASSETS_AND_REFS № 32",
+    "body": true
+  },
+  "breath_sob": {
+    "files": [],
+    "placeholder": "sob",
+    "volume_db": -2.0,
+    "max_distance": 15.0,
+    "source_hint": "Записать: сдавленный всхлип",
+    "body": true
+  },
+  "breath_gasp": {
+    "files": [],
+    "placeholder": "gasp",
+    "volume_db": 0.0,
+    "max_distance": 18.0,
+    "source_hint": "Записать: резкий вдох после задержки дыхания",
+    "body": true
+  },
+  "breath_ragged": {
+    "files": [],
+    "placeholder": "ragged",
+    "volume_db": -10.0,
+    "max_distance": 8.0,
+    "loop": true,
+    "source_hint": "Записать: мелкое прерывистое дыхание подростка, который боится дышать вслух (ртом, дрожит), петлёй 1–2 с; ASSETS_AND_REFS № 32",
+    "body": true
+  },
+  "breath_catch": {
+    "files": [],
+    "placeholder": "catch",
+    "volume_db": -6.0,
+    "max_distance": 8.0,
+    "source_hint": "Записать: короткий судорожный зацеп вдоха — горло перехватило",
+    "body": true
+  },
+  "breath_sip": {
+    "files": [],
+    "placeholder": "sip",
+    "volume_db": -14.0,
+    "max_distance": 6.0,
+    "source_hint": "Записать: тихий сдержанный вдох носом после задержки дыхания",
+    "body": true
+  },
+  "stomach_rumble": {
+    "files": [],
+    "placeholder": "gutrumble",
+    "volume_db": -4.0,
+    "max_distance": 6.0,
+    "source_hint": "Foley: глухое низкое бурчание в животе перед урчанием (едва слышно), записать самим или Freesound, ASSETS_AND_REFS № 32",
+    "body": true
+  },
+  "stomach_growl": {
+    "files": [],
+    "placeholder": "gutgrowl",
+    "volume_db": -4.0,
+    "max_distance": 10.0,
+    "source_hint": "Freesound: урчание в животе голодного человека (stomach growl), ASSETS_AND_REFS № 32",
+    "body": true
+  },
+  "chew_bread": {
+    "files": [],
+    "placeholder": "chew",
+    "volume_db": -8.0,
+    "max_distance": 6.0,
+    "source_hint": "Foley: жевание чёрствого хлеба с закрытым ртом; записать самим, ASSETS_AND_REFS № 32–33",
+    "body": true
+  },
+  "breath_hiss": {
+    "files": [],
+    "placeholder": "hiss",
+    "volume_db": -6.0,
+    "max_distance": 8.0,
+    "source_hint": "Записать: резкий вдох сквозь зубы от боли (подросток), ASSETS_AND_REFS № 32",
+    "body": true
+  },
+  "cloth_tear": {
+    "files": [],
+    "placeholder": "tear",
+    "volume_db": -4.0,
+    "max_distance": 10.0,
+    "source_hint": "Freesound: рвущаяся ткань — рукав ватника о колючую проволоку, ASSETS_AND_REFS № 32",
+    "body": true
+  },
+  "wire_scrape": {
+    "files": [],
+    "placeholder": "wirescrape",
+    "volume_db": -3.0,
+    "max_distance": 20.0,
+    "source_hint": "Foley: колючая проволока дрожит и скребёт по ватнику, шорох по земле; ASSETS_AND_REFS № 32–33",
+    "body": false
+  },
+  "bandage_wrap": {
+    "files": [],
+    "placeholder": "wrap",
+    "volume_db": -8.0,
+    "max_distance": 6.0,
+    "source_hint": "Foley: рвут полосу ткани и туго обматывают руку; записать самим, ASSETS_AND_REFS № 32–33",
+    "body": true
+  },
+  "breath_pant": {
+    "files": [],
+    "placeholder": "pant",
+    "volume_db": -6.0,
+    "max_distance": 12.0,
+    "source_hint": "Freesound: запыхавшееся дыхание подростка после бега (вдох-выдох ртом), ASSETS_AND_REFS № 32",
+    "body": true
+  },
+  "seize_grab": {
+    "files": [],
+    "placeholder": "grab",
+    "volume_db": -3.0,
+    "max_distance": 10.0,
+    "source_hint": "Foley: рука хватает за ворот грубой ткани (ватник, суконная куртка) и рывок; записать самим или Sonniss GDC bundle, ASSETS_AND_REFS № 32–33",
+    "body": true
+  },
+  "door_knock": {
+    "files": [],
+    "placeholder": "knock",
+    "volume_db": 4.0,
+    "max_distance": 35.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: удары кулаком в деревянную дверь"
+  },
+  "door_kick": {
+    "files": [],
+    "placeholder": "knock",
+    "volume_db": 6.0,
+    "max_distance": 40.0,
+    "source_hint": "Freesound: выбитая ногой деревянная дверь"
+  },
+  "door_creak": {
+    "files": [],
+    "placeholder": "creak",
+    "volume_db": -4.0,
+    "max_distance": 15.0,
+    "source_hint": "Freesound: скрип старой двери / половиц, ASSETS_AND_REFS № 32"
+  },
+  "door_hit": {
+    "files": [],
+    "placeholder": "thump",
+    "volume_db": 0.0,
+    "max_distance": 15.0,
+    "source_hint": "Foley: удар деревянной дверью по плечу в ватнике (глухой, без звона); записать самим или Sonniss GDC bundle, ASSETS_AND_REFS № 32–33",
+    "body": true
+  },
+  "hatch_lid": {
+    "files": [],
+    "placeholder": "hatch",
+    "volume_db": -2.0,
+    "max_distance": 20.0,
+    "source_hint": "Записать: деревянная крышка подпола в полу избы — поднять (скрип петли или кольца) и опустить (глухой удар досок). Чем крепилась крышка подпола (петли, кольцо, просто лежала в пазу) — [НЕ ПОДТВЕРЖДЕНО]. Запись — после внесения источника и лицензии в docs/ASSETS_AND_REFS.md."
+  },
+  "hay_rustle": {
+    "files": [],
+    "placeholder": "hay",
+    "volume_db": -6.0,
+    "max_distance": 12.0,
+    "source_hint": "Записать: сухое сено раздвигают руками и зарываются в него (сеновал). Запись — после внесения источника и лицензии в docs/ASSETS_AND_REFS.md."
+  },
+  "engine_far": {
+    "files": [],
+    "placeholder": "engine",
+    "volume_db": 0.0,
+    "max_distance": 120.0,
+    "source_hint": "Sonniss GDC bundle: гул грузовика (Opel Blitz) вдалеке, ASSETS_AND_REFS № 33"
+  },
+  "memory_room_tone": {
+    "files": [],
+    "placeholder": "room",
+    "volume_db": -6.0,
+    "max_distance": 20.0,
+    "occlude": false,
+    "source_hint": "Записать: тихий фон довоенной избы — ходики, печь, голоса без слов; без музыки"
+  },
+  "mine_blast": {
+    "files": [],
+    "placeholder": "blast",
+    "volume_db": 8.0,
+    "max_distance": 120.0,
+    "source_hint": "Sonniss GDC bundle: глухой взрыв вдалеке/вблизи, ASSETS_AND_REFS № 33"
+  },
+  "ear_ring": {
+    "files": [],
+    "placeholder": "ring",
+    "volume_db": -4.0,
+    "max_distance": 5.0,
+    "source_hint": "Синтез или Freesound: звон в ушах после взрыва",
+    "body": true
+  },
+  "plaster_crack": {
+    "files": [],
+    "placeholder": "crack",
+    "volume_db": -2.0,
+    "max_distance": 12.0,
+    "source_hint": "Треск гипса / сухой штукатурки, короткий; Freesound (CC0), ASSETS_AND_REFS № 32"
+  },
+  "shell_fall": {
+    "files": [],
+    "placeholder": "shatter",
+    "volume_db": 0.0,
+    "max_distance": 14.0,
+    "source_hint": "Осыпающиеся осколки гипса на дощатый пол; Freesound (CC0), ASSETS_AND_REFS № 32"
+  },
+  "kettle_simmer": {
+    "files": [],
+    "placeholder": "kettle",
+    "volume_db": -8.0,
+    "max_distance": 6.0,
+    "source_hint": "Чайник на печке, тихое закипание, запись без начала и конца — зациклить; Sonniss GDC / Freesound, ASSETS_AND_REFS № 32–33",
+    "loop": true
+  },
+  "typewriter_keys": {
+    "files": [],
+    "placeholder": "typewriter",
+    "volume_db": -6.0,
+    "max_distance": 8.0,
+    "source_hint": "Механическая пишущая машинка 1930-х, несколько ударов и возврат каретки; Freesound, ASSETS_AND_REFS № 32"
+  },
+  "wall_clock": {
+    "files": [],
+    "placeholder": "clock",
+    "volume_db": -10.0,
+    "max_distance": 6.0,
+    "source_hint": "Тиканье настенных часов (ходики) в тихой комнате, ровно раз в секунду, запись без хвоста — зациклить; Freesound (CC0), ASSETS_AND_REFS № 32",
+    "loop": true
+  },
+  "kettle_lid": {
+    "files": [],
+    "placeholder": "lid",
+    "volume_db": -6.0,
+    "max_distance": 7.0,
+    "source_hint": "Дребезг крышки чайника на кипящей воде, короткий; Freesound (CC0), ASSETS_AND_REFS № 32"
+  },
+  "gunshot_far": {
+    "files": [],
+    "placeholder": "shot",
+    "volume_db": 10.0,
+    "max_distance": 600.0,
+    "source_hint": "Sonniss GDC bundle: одиночный винтовочный выстрел вдалеке, ночь, открытое место, ASSETS_AND_REFS № 33"
+  },
+  "gunfire_burst_far": {
+    "files": [],
+    "placeholder": "burst",
+    "volume_db": 10.0,
+    "max_distance": 600.0,
+    "source_hint": "Sonniss GDC bundle: короткая пулемётная очередь вдалеке, ночь, ASSETS_AND_REFS № 33"
+  },
+  "step_boot": {
+    "files": [],
+    "placeholder": "boot",
+    "volume_db": -3.0,
+    "max_distance": 30.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: тяжёлые сапоги по земле и грязи, ASSETS_AND_REFS № 32–33"
+  },
+  "step_boot_board": {
+    "files": [],
+    "placeholder": "boot_board",
+    "volume_db": -1.0,
+    "max_distance": 30.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: сапоги по деревянному полу (изба, кабинет), ASSETS_AND_REFS № 32–33"
+  },
+  "floor_creak": {
+    "files": [],
+    "placeholder": "floorcreak",
+    "volume_db": -4.0,
+    "max_distance": 20.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: скрип половиц под весом, ASSETS_AND_REFS № 32–33"
+  },
+  "step_paw": {
+    "files": [],
+    "placeholder": "paw",
+    "volume_db": -10.0,
+    "max_distance": 14.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: шаги крупной собаки, ASSETS_AND_REFS № 32–33"
+  },
+  "dog_sniff": {
+    "files": [],
+    "placeholder": "sniff",
+    "volume_db": 2.0,
+    "max_distance": 16.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: принюхивающаяся крупная собака (короткие вдохи носом, фырканье), ASSETS_AND_REFS № 32–33"
+  },
+  "wind": {
+    "files": [],
+    "placeholder": "wind",
+    "loop": true,
+    "volume_db": -12.0,
+    "max_distance": 0.0,
+    "source_hint": "Sonniss GDC bundle / Freesound: ветер над полем ночью, без птиц и транспорта, ASSETS_AND_REFS № 32–33"
+  }
+}

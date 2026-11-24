@@ -1,0 +1,152 @@
+[gd_scene load_steps=20 format=3]
+
+[ext_resource type="Script" path="res://src/ai/enemy.gd" id="1_enemy"]
+[ext_resource type="Shader" path="res://src/rendering/shaders/enemy_body.gdshader" id="2_body"]
+[ext_resource type="Shader" path="res://src/rendering/shaders/enemy_insignia.gdshader" id="3_insignia"]
+[ext_resource type="Shader" path="res://src/rendering/shaders/enemy_gorget.gdshader" id="4_gorget"]
+[ext_resource type="Shader" path="res://src/rendering/shaders/enemy_plaster_mask.gdshader" id="5_mask"]
+
+[sub_resource type="CapsuleShape3D" id="Capsule_enemy"]
+radius = 0.3
+height = 1.8
+
+[sub_resource type="ShaderMaterial" id="Mat_cloth"]
+shader = ExtResource("2_body")
+
+[sub_resource type="ShaderMaterial" id="Mat_face"]
+shader = ExtResource("2_body")
+shader_parameter/albedo = Color(0.55, 0.53, 0.5, 1)
+shader_parameter/roughness_value = 0.7
+
+[sub_resource type="ShaderMaterial" id="Mat_helmet"]
+shader = ExtResource("2_body")
+shader_parameter/albedo = Color(0.22, 0.23, 0.22, 1)
+shader_parameter/roughness_value = 0.45
+
+[sub_resource type="ShaderMaterial" id="Mat_insignia"]
+shader = ExtResource("3_insignia")
+
+[sub_resource type="ShaderMaterial" id="Mat_gorget"]
+shader = ExtResource("4_gorget")
+
+[sub_resource type="ShaderMaterial" id="Mat_mask"]
+shader = ExtResource("5_mask")
+
+[sub_resource type="BoxMesh" id="Mesh_leg"]
+size = Vector3(0.15, 0.5, 0.17)
+subdivide_height = 4
+
+[sub_resource type="BoxMesh" id="Mesh_coat"]
+size = Vector3(0.5, 1.05, 0.3)
+subdivide_width = 4
+subdivide_height = 8
+subdivide_depth = 3
+
+[sub_resource type="BoxMesh" id="Mesh_arm"]
+size = Vector3(0.12, 0.66, 0.13)
+subdivide_height = 6
+
+[sub_resource type="SphereMesh" id="Mesh_head"]
+radius = 0.12
+height = 0.25
+radial_segments = 16
+rings = 10
+
+[sub_resource type="SphereMesh" id="Mesh_helmet"]
+radius = 0.16
+height = 0.16
+radial_segments = 16
+rings = 8
+is_hemisphere = true
+
+[sub_resource type="CylinderMesh" id="Mesh_cap"]
+top_radius = 0.14
+bottom_radius = 0.125
+height = 0.09
+radial_segments = 16
+
+[sub_resource type="CylinderMesh" id="Mesh_armband"]
+top_radius = 0.075
+bottom_radius = 0.075
+height = 0.1
+radial_segments = 12
+
+[sub_resource type="BoxMesh" id="Mesh_gorget"]
+size = Vector3(0.26, 0.1, 0.02)
+subdivide_width = 18
+
+[sub_resource type="QuadMesh" id="Mesh_mask"]
+size = Vector2(0.24, 0.28)
+subdivide_width = 6
+subdivide_depth = 6
+
+[node name="Enemy" type="CharacterBody3D"]
+collision_layer = 4
+script = ExtResource("1_enemy")
+
+[node name="Collision" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("Capsule_enemy")
+
+[node name="NavAgent" type="NavigationAgent3D" parent="."]
+path_desired_distance = 0.35
+target_desired_distance = 0.4
+radius = 0.35
+height = 1.8
+
+[node name="Visual" type="Node3D" parent="."]
+
+[node name="LegL" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.1, 0.25, 0)
+mesh = SubResource("Mesh_leg")
+material_override = SubResource("Mat_cloth")
+
+[node name="LegR" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.1, 0.25, 0)
+mesh = SubResource("Mesh_leg")
+material_override = SubResource("Mat_cloth")
+
+[node name="Coat" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.975, 0)
+mesh = SubResource("Mesh_coat")
+material_override = SubResource("Mat_cloth")
+
+[node name="ArmL" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.32, 1.12, 0)
+mesh = SubResource("Mesh_arm")
+material_override = SubResource("Mat_cloth")
+
+[node name="ArmR" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.32, 1.12, 0)
+mesh = SubResource("Mesh_arm")
+material_override = SubResource("Mat_cloth")
+
+[node name="Head" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.62, 0)
+mesh = SubResource("Mesh_head")
+material_override = SubResource("Mat_face")
+
+[node name="Helmet" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.66, 0)
+mesh = SubResource("Mesh_helmet")
+material_override = SubResource("Mat_helmet")
+
+[node name="Cap" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.74, 0)
+mesh = SubResource("Mesh_cap")
+material_override = SubResource("Mat_helmet")
+
+[node name="Armband" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.32, 1.28, 0)
+mesh = SubResource("Mesh_armband")
+material_override = SubResource("Mat_insignia")
+
+[node name="Gorget" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.38, -0.165)
+mesh = SubResource("Mesh_gorget")
+material_override = SubResource("Mat_gorget")
+
+[node name="PlasterMask" type="MeshInstance3D" parent="Visual"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 0, 1.62, -0.13)
+mesh = SubResource("Mesh_mask")
+material_override = SubResource("Mat_mask")

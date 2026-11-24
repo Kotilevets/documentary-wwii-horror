@@ -1,0 +1,42 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Shader" path="res://src/rendering/shaders/post_base.gdshader" id="1_base"]
+[ext_resource type="Shader" path="res://src/rendering/shaders/post_red.gdshader" id="2_red"]
+[ext_resource type="Shader" path="res://src/rendering/shaders/post_teal.gdshader" id="3_teal"]
+
+[sub_resource type="QuadMesh" id="QuadMesh_pp"]
+
+[sub_resource type="ShaderMaterial" id="Mat_base"]
+render_priority = 100
+shader = ExtResource("1_base")
+
+[sub_resource type="ShaderMaterial" id="Mat_red"]
+render_priority = 100
+shader = ExtResource("2_red")
+
+[sub_resource type="ShaderMaterial" id="Mat_teal"]
+render_priority = 100
+shader = ExtResource("3_teal")
+
+[node name="PostProcess" type="Node3D"]
+
+[node name="BasePass" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
+cast_shadow = 0
+extra_cull_margin = 16384.0
+mesh = SubResource("QuadMesh_pp")
+material_override = SubResource("Mat_base")
+
+[node name="RedPass" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
+cast_shadow = 0
+extra_cull_margin = 16384.0
+mesh = SubResource("QuadMesh_pp")
+material_override = SubResource("Mat_red")
+
+[node name="TealPass" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -0.5)
+cast_shadow = 0
+extra_cull_margin = 16384.0
+mesh = SubResource("QuadMesh_pp")
+material_override = SubResource("Mat_teal")

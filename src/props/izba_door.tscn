@@ -1,0 +1,40 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/props/izba_door.gd" id="1_door"]
+[ext_resource type="Script" path="res://src/interaction/interactable.gd" id="2_inter"]
+[ext_resource type="Material" path="res://assets/materials/door_planks.tres" id="m_door_planks"]
+
+[sub_resource type="BoxShape3D" id="Shape_panel"]
+size = Vector3(1.2, 2.05, 0.08)
+
+[sub_resource type="BoxMesh" id="Mesh_panel"]
+size = Vector3(1.2, 2.05, 0.08)
+
+[sub_resource type="BoxMesh" id="Mesh_latch"]
+size = Vector3(0.22, 0.05, 0.05)
+
+[sub_resource type="BoxShape3D" id="Shape_latch"]
+size = Vector3(0.4, 0.4, 0.4)
+
+[node name="IzbaDoor" type="Node3D"]
+script = ExtResource("1_door")
+
+[node name="Panel" type="StaticBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.6, 1.025, 0)
+
+[node name="Shape" type="CollisionShape3D" parent="Panel"]
+shape = SubResource("Shape_panel")
+
+[node name="Mesh" type="MeshInstance3D" parent="Panel"]
+mesh = SubResource("Mesh_panel")
+surface_material_override/0 = ExtResource("m_door_planks")
+
+[node name="Latch" type="Area3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.0, 1.0, 0.08)
+script = ExtResource("2_inter")
+
+[node name="Shape" type="CollisionShape3D" parent="Latch"]
+shape = SubResource("Shape_latch")
+
+[node name="Mesh" type="MeshInstance3D" parent="Latch"]
+mesh = SubResource("Mesh_latch")

@@ -1,0 +1,47 @@
+{
+  "_status": "Игровые данные для механики сверки, не исторические документы. Названия мест, номера и даты вымышлены. Подлинный бланк пропуска (Passierschein / Ausweis), его надписи и печати — [НЕ ПОДТВЕРЖДЕНО]: вносит автор по источнику из HISTORICAL_ARCHIVE.md.",
+  "today": "1942-10-14",
+  "destination": "Гарнизон",
+  "sample": {
+    "id": "sample",
+    "stamp_shape": "round",
+    "stamp_side": "right",
+    "valid_until": "1942-10-31",
+    "route": ["Ольховка", "Гарнизон"],
+    "serial": "№ 0417"
+  },
+  "candidates": [
+    {
+      "id": "pass_a",
+      "stamp_shape": "square",
+      "stamp_side": "right",
+      "valid_until": "1942-10-31",
+      "route": ["Ольховка", "Гарнизон"],
+      "serial": "№ 0522"
+    },
+    {
+      "id": "pass_b",
+      "stamp_shape": "round",
+      "stamp_side": "right",
+      "valid_until": "1942-09-30",
+      "route": ["Ольховка", "Гарнизон"],
+      "serial": "№ 0388"
+    },
+    {
+      "id": "pass_c",
+      "stamp_shape": "round",
+      "stamp_side": "right",
+      "valid_until": "1942-10-31",
+      "route": ["Ольховка", "Гарнизон"],
+      "serial": "№ 0461"
+    },
+    {
+      "id": "pass_d",
+      "stamp_shape": "round",
+      "stamp_side": "left",
+      "valid_until": "1942-11-15",
+      "route": ["Ольховка", "Станция"],
+      "serial": "№ 0590"
+    }
+  ]
+}

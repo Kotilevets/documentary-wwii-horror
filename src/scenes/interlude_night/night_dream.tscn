@@ -1,0 +1,82 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/scenes/interlude_night/night_dream.gd" id="1_level"]
+[ext_resource type="Script" path="res://src/scenes/interlude_night/night_layout.gd" id="2_layout"]
+[ext_resource type="PackedScene" path="res://src/player/player.tscn" id="3_player"]
+
+[sub_resource type="Environment" id="Env_dream"]
+background_mode = 1
+background_color = Color(0.01, 0.01, 0.012, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.3, 0.3, 0.32, 1)
+ambient_light_energy = 0.18
+tonemap_mode = 0
+fog_enabled = true
+fog_light_color = Color(0.05, 0.05, 0.05, 1)
+fog_density = 0.04
+
+[sub_resource type="BoxShape3D" id="Shape_gate"]
+size = Vector3(1.4, 2.2, 0.6)
+
+[node name="NightDream" type="Node3D"]
+script = ExtResource("1_level")
+ending_title = ""
+has_wind = false
+next_level = "res://src/scenes/act2_road/act2_road.tscn"
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_dream")
+
+[node name="Layout" type="Node3D" parent="."]
+script = ExtResource("2_layout")
+
+[node name="LoopGate" type="Area3D" parent="."]
+position = Vector3(1.5, 1.1, -6.2)
+collision_layer = 0
+collision_mask = 2
+
+[node name="Shape" type="CollisionShape3D" parent="LoopGate"]
+shape = SubResource("Shape_gate")
+
+[node name="Player" parent="." instance=ExtResource("3_player")]
+position = Vector3(0.5, 0, -0.5)
+
+[node name="Spawns" type="Node3D" parent="."]
+
+[node name="Start" type="Marker3D" parent="Spawns"]
+position = Vector3(0.5, 0, -0.5)
+
+[node name="Passage" type="Marker3D" parent="Spawns"]
+position = Vector3(1.5, 0, -3.5)
+
+[node name="ForestSeat" type="Marker3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.8192, -0.5736, 0, 0.5736, 0.8192, 60, 0.45, 0)
+
+[node name="Overlay" type="CanvasLayer" parent="."]
+layer = 20
+
+[node name="Fade" type="ColorRect" parent="Overlay"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+color = Color(0, 0, 0, 1)
+
+[node name="Caption" type="Label" parent="Overlay"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -460.0
+offset_top = -60.0
+offset_right = 460.0
+offset_bottom = 60.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_font_sizes/font_size = 28
+horizontal_alignment = 1
+vertical_alignment = 1
+autowrap_mode = 3

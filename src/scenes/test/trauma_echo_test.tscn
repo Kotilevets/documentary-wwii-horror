@@ -1,0 +1,97 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://src/scenes/test/trauma_echo_test.gd" id="1_script"]
+[ext_resource type="PackedScene" path="res://src/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://src/ai/enemy.tscn" id="3_enemy"]
+[ext_resource type="Script" path="res://src/ai/runtime_nav_region.gd" id="4_nav"]
+[ext_resource type="Script" path="res://src/props/searchlight_tower.gd" id="5_tower"]
+[ext_resource type="Script" path="res://src/story/trauma_echo.gd" id="6_echo"]
+[ext_resource type="Material" path="res://assets/materials/ground.tres" id="m_ground"]
+[ext_resource type="Material" path="res://assets/materials/stove.tres" id="m_stove"]
+[ext_resource type="Material" path="res://assets/materials/brick.tres" id="m_brick"]
+[ext_resource type="Material" path="res://assets/materials/hedge.tres" id="m_hedge"]
+
+[sub_resource type="Environment" id="Env_night"]
+background_mode = 1
+background_color = Color(0.015, 0.016, 0.02, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.3, 0.32, 0.38, 1)
+ambient_light_energy = 0.35
+tonemap_mode = 0
+fog_enabled = true
+fog_light_color = Color(0.12, 0.12, 0.13, 1)
+fog_density = 0.03
+
+[node name="TraumaEchoTest" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_night")
+
+[node name="Moon" type="DirectionalLight3D" parent="."]
+rotation = Vector3(-0.75, 0.6, 0)
+light_color = Color(0.75, 0.8, 0.9, 1)
+light_energy = 0.3
+shadow_enabled = true
+
+[node name="Navigation" type="NavigationRegion3D" parent="."]
+script = ExtResource("4_nav")
+
+[node name="Ground" type="CSGBox3D" parent="Navigation"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, -0.1, -10)
+use_collision = true
+size = Vector3(60, 0.2, 60)
+material = ExtResource("m_ground")
+
+[node name="Stove" type="CSGBox3D" parent="Navigation"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 0.9, 0)
+use_collision = true
+size = Vector3(1.8, 1.8, 1.8)
+material = ExtResource("m_stove")
+
+[node name="Chimney" type="CSGBox3D" parent="Navigation"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 8, 2.6, 0)
+use_collision = true
+size = Vector3(0.6, 1.6, 0.6)
+material = ExtResource("m_brick")
+
+[node name="Haystack" type="CSGBox3D" parent="Navigation"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0.85, -1.6)
+use_collision = true
+size = Vector3(2.2, 1.7, 2.2)
+material = ExtResource("m_hedge")
+
+[node name="Tower" type="Node3D" parent="."]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -16, 0, -24)
+script = ExtResource("5_tower")
+sweep_amplitude = 20.0
+
+[node name="PatrolRoute" type="Node3D" parent="."]
+
+[node name="R1" type="Marker3D" parent="PatrolRoute"]
+position = Vector3(2, 0, 1.15)
+
+[node name="R2" type="Marker3D" parent="PatrolRoute"]
+position = Vector3(14, 0, 1.15)
+
+[node name="Patrol" parent="." node_paths=PackedStringArray("patrol_route") instance=ExtResource("3_enemy")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 2, 0, 1.15)
+kind = 2
+patrol_route = NodePath("../PatrolRoute")
+walk_speed = 1.1
+has_torch = true
+torch_on = true
+
+[node name="Spots" type="Node3D" parent="."]
+
+[node name="A" type="Marker3D" parent="Spots"]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 8, 0, -1.1)
+
+[node name="B" type="Marker3D" parent="Spots"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -16, 0, 0)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, 8, 0, -1.1)
+
+[node name="TraumaEcho" type="Node" parent="."]
+script = ExtResource("6_echo")

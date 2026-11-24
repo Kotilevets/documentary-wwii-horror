@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="ItemData" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://src/inventory/item_data.gd" id="1_item"]
+
+[sub_resource type="CylinderMesh" id="Mesh_item"]
+top_radius = 0.03
+bottom_radius = 0.03
+height = 0.08
+
+[resource]
+script = ExtResource("1_item")
+id = "bandage"
+display_name = "Бинт"
+mesh = SubResource("Mesh_item")
+document_id = ""
+stackable = true

@@ -1,0 +1,92 @@
+[gd_scene load_steps=17 format=3]
+
+[ext_resource type="Script" path="res://src/scenes/test/hide_spots_test.gd" id="1_script"]
+[ext_resource type="Script" path="res://src/props/board_floor.gd" id="bf_boards"]
+[ext_resource type="PackedScene" path="res://src/player/player.tscn" id="2_player"]
+[ext_resource type="PackedScene" path="res://src/ai/enemy.tscn" id="3_enemy"]
+[ext_resource type="PackedScene" path="res://src/interaction/cellar_hatch.tscn" id="4_hatch"]
+[ext_resource type="PackedScene" path="res://src/interaction/stove_nook.tscn" id="5_nook"]
+[ext_resource type="PackedScene" path="res://src/interaction/wardrobe_hide.tscn" id="6_wardrobe"]
+[ext_resource type="Material" path="res://assets/materials/planks.tres" id="m_planks"]
+[ext_resource type="Material" path="res://assets/materials/logs.tres" id="m_logs"]
+[ext_resource type="Material" path="res://assets/materials/stove.tres" id="m_stove"]
+
+[sub_resource type="Environment" id="Env"]
+background_mode = 1
+background_color = Color(0.02, 0.02, 0.02, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.25, 0.25, 0.27, 1)
+ambient_light_energy = 0.4
+tonemap_mode = 0
+
+[node name="HideSpotsTest" type="Node3D"]
+script = ExtResource("1_script")
+
+[node name="Environment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="Lamp" type="OmniLight3D" parent="."]
+position = Vector3(-0.6, 2.2, -0.4)
+light_color = Color(1, 1, 1, 1)
+light_energy = 0.7
+shadow_enabled = true
+omni_range = 7.0
+
+[node name="Floor" type="CSGBox3D" parent="."]
+position = Vector3(0, -0.1, 0)
+use_collision = true
+size = Vector3(14, 0.2, 14)
+material = ExtResource("m_planks")
+
+[node name="Boards" type="Node3D" parent="."]
+script = ExtResource("bf_boards")
+size = Vector3(14, 1, 14)
+
+[node name="WallS" type="CSGBox3D" parent="." groups=["sound_walls"]]
+position = Vector3(-0.5, 1.4, 2.4)
+use_collision = true
+size = Vector3(7, 2.8, 0.2)
+material = ExtResource("m_logs")
+
+[node name="WallE" type="CSGBox3D" parent="." groups=["sound_walls"]]
+position = Vector3(2.9, 1.4, -0.1)
+use_collision = true
+size = Vector3(0.2, 2.8, 5.2)
+material = ExtResource("m_logs")
+
+[node name="Stove" type="CSGBox3D" parent="."]
+position = Vector3(1.9, 0.9, 1.0)
+use_collision = true
+size = Vector3(1.4, 1.8, 1.4)
+material = ExtResource("m_stove")
+
+[node name="StoveNook" parent="." instance=ExtResource("5_nook")]
+transform = Transform3D(0, 0, 1, 0, 1, 0, -1, 0, 0, 2.1, 0, 2.0)
+
+[node name="WardrobeHide" parent="." instance=ExtResource("6_wardrobe")]
+position = Vector3(-1.5, 0, 1.95)
+
+[node name="CellarHatch" parent="." instance=ExtResource("4_hatch")]
+position = Vector3(-0.3, 0, -0.5)
+
+[node name="Player" parent="." instance=ExtResource("2_player")]
+transform = Transform3D(-1, 0, 0, 0, 1, 0, 0, 0, -1, -0.6, 0, -3.6)
+
+[node name="Soldier" parent="." instance=ExtResource("3_enemy")]
+position = Vector3(-4, 0, 0.6)
+has_torch = true
+hold_position = true
+
+[node name="Route" type="Node3D" parent="."]
+
+[node name="R1" type="Marker3D" parent="Route"]
+position = Vector3(-1.5, 0, 0.9)
+
+[node name="R2" type="Marker3D" parent="Route"]
+position = Vector3(0.5, 0, 2.0)
+
+[node name="R3" type="Marker3D" parent="Route"]
+position = Vector3(-0.3, 0, -0.6)
+
+[node name="R4" type="Marker3D" parent="Route"]
+position = Vector3(-4, 0, 0.6)
