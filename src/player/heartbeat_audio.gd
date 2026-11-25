@@ -25,21 +25,33 @@ const DUB_SHARE := 0.22
 ## panic: he can count them (docs/ARCHITECTURE.md, «Дыхание рвётся»).
 const HOLD_AMP := 0.3
 ## The engine drains the generator in blocks of about 10 ms, so the queue read
-## in a frame is off by up to a block, differently each frame; and the sound
-## of a heart speeding up is pushed 0.19 s ahead at the pace it had. The beat
-## clock runs on from push to push, and each push closes NUDGE of the gap to
+## in a frame is off by up to a block, differently each frame. The beat clock
+## runs on from push to push, and each push closes NUDGE of the gap to
 ## PanicSystem's clock, the next beat coming at most MAX_SLEW sooner or later.
 const NUDGE := 0.3
 const MAX_SLEW := 0.25
+## A heart speeding up or slowing down (a view cone, running, panic falling)
+## is, by the time a frame pushed now is heard, ahead of or behind its pace of
+## now by half its change of pace times the lead squared: 77 ms at 0.6 a
+## second with «Задержка звука» 0.3 s (fourth review, 25.11.2026). The change
+## of PanicSystem's beat rate is measured between pushes (track_rate()), and
+## the clock is placed and stepped at the pace PanicSystem will have, up to
+## MAX_BPM as it rises and to the floor's beat rate as it falls (speeding()).
+## When the measure changes, the clock moves with it at once, not by NUDGE. A
+## change of MAX_ACCEL beats a second per game second or more is a jump (a
+## fright, a step down), which is leapt, not a pace.
+const MAX_ACCEL := 2.0
 ## A gap of more than RESYNC s (a fright from rest, a step down in panic, a
 ## new «Задержка звука», a reset, a new time scale) is leapt: the clock is set
 ## to PanicSystem's and the sound goes on as it was. Wherever the clock lands,
 ## forward or back, the beat it is in starts at once if it began within the
 ## breath window (heard late by that much), unless the beat heard last began
-## within the window of it and so stands for it (_catch_up). And at any beat:
-## if the beat heard last began within the breath window of it, it stands for
-## this one, which is not played again. So no two beats are ever heard closer
-## than the window.
+## within the window of it and so stands for it (_catch_up). The same test is
+## made at every push, not only at a leap: gaps under RESYNC can carry the
+## beat away from the one that stood for it, out of its window. And at any
+## beat: if the beat heard last began within the breath window of it, it
+## stands for this one, which is not played again. So no two beats are ever
+## heard closer than the window.
 const RESYNC := 0.05
 ## Loudness glides to a new value over FADE s.
 const FADE := 0.01
@@ -110,8 +122,9 @@ var _old_since := INF
 var _old_dub := DUB_DELAY
 ## Game seconds since the newest beat began, at the next frame to synthesize:
 ## as _since, but it goes on through the engine's silence when the queue ran
-## dry (_since is INF then), dated by the clock (last_onset_usec). INF before
-## the first beat. Whether a beat stands for another is judged by it.
+## dry (_since is INF then), dated on the engine's clock (_onset_engine_usec).
+## INF before the first beat. Whether a beat stands for another is judged by
+## it.
 var _attack_age := INF
 ## Share of the beat per frame in the last push: a beat crossed between two
 ## pushes is placed by the step that crossed it.
@@ -123,9 +136,26 @@ var _latency := 0.0
 var _latency_at := -LATENCY_EVERY_MS
 ## AudioStreamGeneratorPlayback.get_skips() after the last push.
 var _skips := 0
-## Time.get_ticks_usec() at which the last frame pushed will be heard: where
-## the engine's silence begins if the queue runs dry.
+## The engine's clock: Time.get_ticks_usec() less «Задержка звука», moved on
+## by the time the game stood paused (the stream stands too, and PanicSystem's
+## clock). The delay the heart believes may change in the pause menu; the
+## sound before the silence and after it go through the same headphones.
+## When the newest beat pushed and the last frame pushed reach the engine's
+## output (0: none yet): the silence begins at the second if the queue runs
+## dry.
+var _onset_engine_usec := 0
 var _queue_end_usec := 0
+## Time.get_ticks_usec() at which the game was paused (0: it is not).
+var _paused_usec := 0
+## PanicSystem's beat rate (beats a second) at the last push, when that was
+## (Time.get_ticks_usec(), moved on by the paused time; 0: no push yet), and
+## how fast it changes, beats a second per game second, halved each push
+## (track_rate()).
+var _rate_was := 0.0
+var _rate_usec := 0
+var _accel := 0.0
+## speeding() at the last push, which the clock was moved on by.
+var _speed_was := 0.0
 ## resample_hold() for the output rate it was last worked out for.
 static var _hold_rate := 0.0
 static var _hold := 0.0
@@ -146,6 +176,36 @@ func _ready() -> void:
 	# playback, it lives exactly as long as the audio server can reach it.
 	_playback.set_meta(&"generator", gen)
 	_capacity = _playback.get_frames_available()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_PAUSED:
+		paused(Time.get_ticks_usec())
+	elif what == NOTIFICATION_UNPAUSED:
+		resumed(Time.get_ticks_usec())
+
+
+## The game was paused at `now` (Time.get_ticks_usec()): the engine's clock
+## stops (the menu, a document read, the window losing focus).
+func paused(now: int) -> void:
+	_paused_usec = now
+
+
+## The game goes on at `now`: what is dated on the engine's clock moves on by
+## the time it stood. Without this, the beat heard just before the pause was
+## as old as the pause after it, and if the first frame after it was longer
+## than the queue, it was played again 29-153 ms after itself (fourth review).
+func resumed(now: int) -> void:
+	if _paused_usec == 0:
+		return
+	var held := now - _paused_usec
+	_paused_usec = 0
+	if _onset_engine_usec != 0:
+		_onset_engine_usec += held
+	if _queue_end_usec != 0:
+		_queue_end_usec += held
+	if _rate_usec != 0:
+		_rate_usec += held
 
 
 func _process(_delta: float) -> void:
@@ -203,22 +263,69 @@ func push(room: int, now: int, driver: float, skips: int, count := -1) -> Packed
 	var frames := room if count < 0 else count
 	_capacity = maxi(_capacity, room)
 	var lead := lead_time(_capacity - room, driver)
+	var delay := GameState.sound_delay()
+	track_rate(now)
 	if skips != _skips:
 		# The engine played silence where the queue ran out (a frame longer
 		# than the queue): what was sounding is cut, start afresh after it. The
-		# beat heard last, before the silence, is dated by the clock: it may
-		# stand for the one PanicSystem's clock is in, unless the silence cut it
-		# before more than a click of it was heard (CUT_HEARD).
+		# beat heard last, before the silence, is dated on the engine's clock:
+		# it may stand for the one PanicSystem's clock is in, unless the silence
+		# cut it before more than a click of it was heard (CUT_HEARD).
 		_skips = skips
 		beat_clock = -1.0
 		_attack_age = INF
-		if last_onset_usec != 0 and _queue_end_usec - last_onset_usec >= int(CUT_HEARD * 1000000.0):
-			_attack_age = (float(now - last_onset_usec) / 1000000.0 + lead) * Engine.time_scale
+		if _onset_engine_usec != 0 and _queue_end_usec - _onset_engine_usec >= int(CUT_HEARD * 1000000.0):
+			_attack_age = (float(now - _onset_engine_usec) / 1000000.0 + lead - delay) * Engine.time_scale
 	var out := synth(frames, lead, heard_amp)
 	if last_onset_ahead >= 0.0:
 		last_onset_usec = now + int(last_onset_ahead * 1000000.0)
-	_queue_end_usec = now + int((lead + frames / MIX_RATE) * 1000000.0)
+		_onset_engine_usec = now + int((last_onset_ahead - delay) * 1000000.0)
+	_queue_end_usec = now + int((lead - delay + frames / MIX_RATE) * 1000000.0)
 	return out
+
+
+## Measures, at a push at `now` (Time.get_ticks_usec()), how fast
+## PanicSystem's beat rate has changed since the last push, in game time. A
+## jump (MAX_ACCEL) counts as no change; the measure is halved each push.
+func track_rate(now: int) -> void:
+	var rate := 1.0 / PanicSystem.beat_period()
+	if _rate_usec != 0:
+		var game := float(now - _rate_usec) / 1000000.0 * Engine.time_scale
+		if game > 0.0:
+			var r := (rate - _rate_was) / game
+			_accel = 0.5 * _accel + 0.5 * (r if absf(r) < MAX_ACCEL else 0.0)
+	_rate_usec = now
+	_rate_was = rate
+
+
+## Game seconds until PanicSystem's beat rate, changing at _accel, reaches its
+## bound from `period`: MAX_BPM as it rises; as it falls, the beat rate of the
+## floor or of running, which panic does not fall below.
+func _to_bound(period: float) -> float:
+	if _accel == 0.0:
+		return 0.0
+	var bound := PanicSystem.MAX_BPM / 60.0
+	if _accel < 0.0:
+		bound = lerpf(PanicSystem.REST_BPM, PanicSystem.MAX_BPM,
+				maxf(PanicSystem.floor_level, PanicSystem.exertion * PanicSystem.EXERTION_HEART)) / 60.0
+	return maxf((bound - 1.0 / period) / _accel, 0.0)
+
+
+## Share of the beat PanicSystem's clock gains in `a` game seconds over its
+## pace of now (`period`), its beat rate changing at _accel up to its bound.
+func speeding(a: float, period: float) -> float:
+	if a <= 0.0:
+		return 0.0
+	var t := minf(_to_bound(period), a)
+	return 0.5 * _accel * t * t + _accel * t * (a - t)
+
+
+## Beats a game second PanicSystem's clock runs faster than at `period`, `a`
+## game seconds from now.
+func speeding_rate(a: float, period: float) -> float:
+	if a <= 0.0:
+		return 0.0
+	return _accel * minf(_to_bound(period), a)
 
 
 ## Seconds until a frame pushed now is heard, with `queued` frames already in
@@ -275,10 +382,16 @@ func synth(frames: int, lead: float, amp: float) -> PackedVector2Array:
 	var period := PanicSystem.beat_period()
 	var scale := Engine.time_scale
 	var dt := scale / MIX_RATE  # game seconds per frame
-	var step := dt / period  # share of the beat per frame
-	var target := since_beat_at(PanicSystem.beat_phase, period, lead) / period
+	# Share of the beat per frame, at the pace PanicSystem's clock will have
+	# when the middle of these frames is heard.
+	var step := dt / period + dt * speeding_rate((lead + frames * 0.5 / MIX_RATE) * scale, period)
+	var speed := speeding(lead * scale, period)
+	var target := fposmod(since_beat_at(PanicSystem.beat_phase, period, lead) / period + speed, 1.0)
 	var window := PanicSystem.beat_window()
 	last_onset_ahead = -1.0
+	if beat_clock >= 0.0:
+		beat_clock = maxf(beat_clock + speed - _speed_was, 0.0)
+	_speed_was = speed
 	if beat_clock < 0.0:
 		_restart(target, period, window, lead)
 	else:
@@ -286,6 +399,8 @@ func synth(frames: int, lead: float, amp: float) -> PackedVector2Array:
 		if absf(gap) * period > RESYNC * scale:
 			_leap(target, period, window, lead)
 		else:
+			if beat_clock < 1.0:
+				_catch_up(target, period, window, lead)
 			var most := MAX_SLEW * step * frames
 			step += clampf(NUDGE * gap, -most, most) / frames
 	var glide := absf(amp - _amp) / FADE_FRAMES  # loudness change per frame
