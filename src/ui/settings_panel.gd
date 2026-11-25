@@ -1,13 +1,15 @@
 class_name SettingsPanel
 extends VBoxContainer
 ## Settings shared by the main menu and the pause menu: mouse sensitivity,
-## volume, full screen, brightness (BrightnessPanel), the controls
+## volume, «Задержка звука» (wireless headphones), full screen, brightness (BrightnessPanel), the controls
 ## (ControlsPanel). Stored in GameState (user://progress.json).
 
 signal closed
 
 var _mouse: HSlider
 var _volume: HSlider
+var _delay: HSlider
+var _delay_label: Label
 var _fullscreen: Button
 var _back: Button
 var _controls_button: Button
@@ -26,6 +28,15 @@ func _ready() -> void:
 			func(v: float) -> void: GameState.set_setting("mouse_sensitivity", v))
 	_volume = _slider("Громкость", 0.0, 1.0, float(GameState.settings.get("volume", 0.8)),
 			func(v: float) -> void: GameState.set_setting("volume", v))
+	# The heart is synthesized this much earlier (HeartbeatAudio.lead_time).
+	_delay_label = MenuStyle.label(_delay_text(), 24)
+	add_child(_delay_label)
+	_delay = MenuStyle.slider(0.0, GameState.SOUND_DELAY_MAX_MS, GameState.sound_delay() * 1000.0)
+	_delay.step = 10.0
+	_delay.value_changed.connect(func(v: float) -> void:
+		GameState.set_setting("sound_delay_ms", v)
+		_delay_label.text = _delay_text())
+	add_child(_delay)
 	_fullscreen = MenuStyle.button(_fs_text(), 26)
 	_fullscreen.pressed.connect(func() -> void:
 		GameState.set_setting("fullscreen", not bool(GameState.settings.get("fullscreen", false)))
@@ -116,6 +127,8 @@ func focus() -> void:
 	# The other menu may have changed them.
 	_mouse.set_value_no_signal(GameState.mouse_factor())
 	_volume.set_value_no_signal(float(GameState.settings.get("volume", 0.8)))
+	_delay.set_value_no_signal(GameState.sound_delay() * 1000.0)
+	_delay_label.text = _delay_text()
 	MenuStyle.set_text(_fullscreen, _fs_text())
 	_mouse.grab_focus()
 
@@ -126,6 +139,10 @@ func _slider(title: String, lo: float, hi: float, value: float, on_change: Calla
 	s.value_changed.connect(on_change)
 	add_child(s)
 	return s
+
+
+func _delay_text() -> String:
+	return "Задержка звука (беспроводные наушники): %d мс" % roundi(GameState.sound_delay() * 1000.0)
 
 
 func _fs_text() -> String:

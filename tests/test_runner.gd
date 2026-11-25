@@ -168,6 +168,738 @@ func _test_heartbeat() -> void:
 			"heartbeat generator is freed with its playback once the mixer has let go",
 			"%d ms" % (Time.get_ticks_msec() - t0))
 
+	# The beat is heard on PanicSystem's clock (docs/ARCHITECTURE.md, «Удар
+	# слышен в такт»): a frame pushed now is heard after what is queued, what
+	# the engine holds after the queue, the driver and «Задержка звука», so the
+	# beats are placed where PanicSystem's clock will be at that moment.
+	# Headless, the queue is checked on a model of the engine's audio path; the
+	# real one by tools/heart_sync_probe.gd.
+	var heart := HEARTBEAT_AUDIO.new() as AudioStreamPlayer
+	add_child(heart)
+	await frames(2)
+	var mix: float = HEARTBEAT_AUDIO.MIX_RATE
+	# The player's own «Задержка звука» and a sped-up clock would move every
+	# beat below: both are set aside for the block and put back after it.
+	var delay_was = GameState.settings.get("sound_delay_ms", null)
+	GameState.settings["sound_delay_ms"] = 0
+	var scale_was := Engine.time_scale
+	Engine.time_scale = 1.0
+	PanicSystem.reset()
+	var rest := PanicSystem.beat_period()
+	PanicSystem.beat_phase = 0.5
+	_afresh(heart)  # start afresh, not from the last push
+	heart.set("_amp", 1.0)
+	var lead := 0.186
+	var buf: PackedVector2Array = heart.call("synth", 8192, lead, 1.0)
+	var due := 0.5 * rest  # the next beat on PanicSystem's clock
+	var k := int(round((due - lead) * mix))
+	check(absf(float(heart.get("last_onset_ahead")) - due) < 0.00001,
+			"the beat synthesized is heard exactly when PanicSystem beats, not a queue later",
+			[heart.get("last_onset_ahead"), due])
+	check(_peak(buf, k - 2000, k) == 0.0 and _peak(buf, k, k + int(0.006 * mix)) > 0.8,
+			"silence until the frame heard on the beat, the thump from that very frame", [k, _peak(buf, k, k + int(0.006 * mix))])
+
+	PanicSystem.level = 1.0
+	PanicSystem.floor_level = 1.0
+	var racing := PanicSystem.beat_period()
+	PanicSystem.beat_phase = 0.0
+	_afresh(heart)
+	buf = heart.call("synth", 8192, 0.0, 1.0)
+	var dub: float = HEARTBEAT_AUDIO.dub_delay(racing)
+	check(is_equal_approx(HEARTBEAT_AUDIO.dub_delay(60.0 / 72.0), 0.18) and is_equal_approx(HEARTBEAT_AUDIO.dub_delay(0.5), 0.11)
+			and absf(dub - 0.08) < 0.001,
+			"the second sound: 0.18 s at rest, 0.11 s at 120 bpm, 0.08 s at 165", dub)
+	check(_peak(buf, int((dub + 0.004) * mix), int((dub + 0.008) * mix)) > 0.3
+			and _peak(buf, int((dub + 0.151) * mix), int((racing - 0.001) * mix)) == 0.0,
+			"at 165 bpm the second sound follows close behind, the rest of the beat is quiet",
+			[_peak(buf, int((dub + 0.151) * mix), int((racing - 0.001) * mix))])
+
+	var saved = GameState.settings.get("sound_delay_ms", null)
+	GameState.settings["sound_delay_ms"] = 120
+	var with_delay: float = HEARTBEAT_AUDIO.lead_time(2205, 0.03)
+	GameState.settings["sound_delay_ms"] = 5000
+	var too_much := GameState.sound_delay()
+	GameState.settings["sound_delay_ms"] = -50
+	var below := GameState.sound_delay()
+	if saved == null:
+		GameState.settings.erase("sound_delay_ms")
+	else:
+		GameState.settings["sound_delay_ms"] = saved
+	check(absf(with_delay - (0.1 + 0.03 + 0.12)) < 0.00001 and is_equal_approx(too_much, 0.3) and below == 0.0,
+			"the lead: what is queued, the driver and «Задержка звука» (0-300 ms)", [with_delay, too_much, below])
+	# What the driver adds, as _process takes it: the time to the next mix (read
+	# just before and after; a driver callback between the reads is retried),
+	# what the engine holds after the queue (9.7 ms at 48 kHz: the resampler's
+	# 66 frames on average, the mixer's 64 of lookahead and half its 512-frame
+	# block; 13.2 ms at 44.1 kHz, where the resampler holds 130 at every block)
+	# and the latency.
+	var hold48: float = HEARTBEAT_AUDIO.resample_hold(48000.0)
+	var hold44: float = HEARTBEAT_AUDIO.resample_hold(44100.0)
+	var lag48: float = HEARTBEAT_AUDIO.engine_lag(48000.0)
+	var lag44: float = HEARTBEAT_AUDIO.engine_lag(44100.0)
+	var lag_here: float = HEARTBEAT_AUDIO.engine_lag(AudioServer.get_mix_rate())
+	var driver_ok := false
+	var driver_seen: Array = []
+	for attempt in 3:
+		var before := maxf(AudioServer.get_time_to_next_mix(), 0.0)
+		var driver: float = HEARTBEAT_AUDIO.driver_time(0.25)
+		var after := maxf(AudioServer.get_time_to_next_mix(), 0.0)
+		var waits := driver - 0.25 - lag_here
+		driver_seen.append([before, waits, after])
+		driver_ok = driver_ok or (waits >= minf(before, after) - 0.000001 and waits <= maxf(before, after) + 0.000001)
+	check(absf(hold48 - 66.03) < 0.01 and hold44 == 130.0
+			and absf(lag48 - (hold48 / 22050.0 + 320.0 / 48000.0)) < 0.0000001
+			and absf(lag44 - (130.0 / 22050.0 + 320.0 / 44100.0)) < 0.0000001 and driver_ok,
+			"after the queue: the time to the next mix, the engine's 9.7 ms (13.2 at 44.1 kHz) and the driver's latency",
+			[hold48, hold44, lag48, lag44, driver_seen])
+	check(is_equal_approx(HEARTBEAT_AUDIO.since_beat_at(0.9, 0.5, 0.1), 0.05)
+			and is_equal_approx(HEARTBEAT_AUDIO.since_beat_at(0.0, 0.5, 0.0), 0.0),
+			"since the beat: 0.1 s past a beat due in 0.05 s is 0.05 s after it")
+	Engine.time_scale = 2.0
+	var sped := HEARTBEAT_AUDIO.since_beat_at(0.0, 1.0, 0.25)
+	Engine.time_scale = 1.0
+	check(is_equal_approx(sped, 0.5), "sped up for the bots, the heart's clock runs on game time", sped)
+
+	# What _process pushes: the queue it reads, the driver, the beat placed by
+	# them; and after the queue ran dry, a fresh start. With 1095 frames queued
+	# and 10 ms of driver the lead is 0.0597 s: the beat due in 0.0833 s goes
+	# into frame 522.
+	PanicSystem.reset()
+	var period := PanicSystem.beat_period()
+	var dub_rest := HEARTBEAT_AUDIO.dub_delay(period)
+	PanicSystem.beat_phase = 0.9
+	_afresh(heart)
+	heart.set("_capacity", 4095)
+	heart.set("heard_amp", 1.0)
+	var skips: int = heart.get("_skips")
+	var pushed: PackedVector2Array = heart.call("push", 3000, 1000000, 0.01, skips)
+	var first := int(round((0.1 * period - (1095 / mix + 0.01)) * mix))
+	check(_peak(pushed, 0, first) == 0.0 and _peak(pushed, first, first + int(0.006 * mix)) > 0.8
+			and int(heart.get("last_onset_usec")) == 1000000 + int(0.1 * period * 1000000.0),
+			"pushed: the beat lies where the queue and the driver put it, and the time it is heard is noted",
+			[first, _peak(pushed, 0, first), heart.get("last_onset_usec")])
+	pushed = heart.call("push", 300, 2000000, 0.0, skips + 1)
+	var anew := true
+	for i in 300:
+		anew = anew and absf(pushed[i].x - HEARTBEAT_AUDIO.beat_sound(i / mix, dub_rest)) < 0.000001
+	check(anew and int(heart.get("_skips")) == skips + 1,
+			"after the queue ran dry (the engine played silence) the heart starts afresh: the beat due starts from its beginning, nothing cut mid-sound",
+			pushed[100].x)
+	# The queue ran dry 20 ms after a beat began to be heard: the engine cut it
+	# short. With «Задержка звука» at 300 ms and 20 ms of driver, the frame
+	# pushed now is heard 0.32 s on, 0.05 s after that beat began and 30 ms
+	# into PanicSystem's beat: the one heard stands for it, it is not heard a
+	# second time. Had only 10 ms of it been heard (less than CUT_HEARD), it
+	# would not stand for it: the beat is heard again, whole.
+	GameState.settings["sound_delay_ms"] = 300
+	PanicSystem.beat_phase = fposmod((0.03 - 0.32) / period, 1.0)
+	heart.set("last_onset_usec", 3270000)
+	heart.set("_queue_end_usec", 3290000)
+	pushed = heart.call("push", 4095, 3000000, 0.02, skips + 2)
+	check(_peak(pushed, 0, 4095) == 0.0 and float(heart.get("last_onset_ahead")) < 0.0
+			and absf(float(heart.get("_attack_age")) - (0.05 + 4095 / mix)) < 0.000001,
+			"after the queue ran dry just after a beat was heard, that beat is not heard again",
+			[_peak(pushed, 0, 4095), heart.get("last_onset_ahead"), heart.get("_attack_age")])
+	heart.set("last_onset_usec", 3270000)
+	heart.set("_queue_end_usec", 3280000)
+	pushed = heart.call("push", 4095, 3000000, 0.02, skips + 3)
+	GameState.settings["sound_delay_ms"] = 0
+	var again := absf(float(heart.get("last_onset_ahead")) - 0.32) < 0.000001
+	for i in 600:
+		again = again and absf(pushed[i].x - HEARTBEAT_AUDIO.beat_sound(i / mix, dub_rest)) < 0.000001
+	check(again, "after the queue ran dry 10 ms into a beat, the beat is heard again, whole",
+			[heart.get("last_onset_ahead"), pushed[100].x])
+	# What _process hands the engine (feed): the queue may stand empty while the
+	# refill is synthesized (after a long frame, before the first push), and
+	# the engine counts those skips before the refill is in. Taken again after
+	# push_buffer, they do not restart the next push: the beat the refill began
+	# plays on whole.
+	PanicSystem.beat_phase = 0.0
+	_afresh(heart)
+	heart.set("_amp", 1.0)
+	var s0: int = heart.get("_skips")
+	var fake := _FakePlayback.new()
+	fake.skips = [s0 + 1, s0 + 3]  # before the refill; after it, two more counted meanwhile
+	heart.call("feed", fake, 4000000, 0.0)
+	fake.room = 300
+	heart.call("feed", fake, 4186000, 0.0)
+	var whole := fake.pushed.size() == 4395 and int(heart.get("_skips")) == s0 + 3
+	for i in fake.pushed.size():
+		whole = whole and absf(fake.pushed[i].x - HEARTBEAT_AUDIO.beat_sound(i / mix, dub_rest)) < 0.000001
+	check(whole, "skips counted while the refill was made do not restart the next push: the beat plays on whole",
+			[fake.pushed.size(), heart.get("_skips"), fake.pushed[4200].x if fake.pushed.size() > 4200 else null])
+	# The empty queue gets a short head first (HEAD_FRAMES), heard while the
+	# rest is synthesized; a queue nearly full gets what it has room for.
+	check(fake.sizes == [HEARTBEAT_AUDIO.HEAD_FRAMES, 4095 - HEARTBEAT_AUDIO.HEAD_FRAMES, 300],
+			"an empty queue is refilled head first, the rest behind it", fake.sizes)
+	# The queue runs dry again before the next push: feed hands push the skips
+	# it reads now, and the heart starts afresh. The beat begun 0.37 s before
+	# is too far to stand for the one 0.17 s back, and that one too far back
+	# to start: silence until the next.
+	fake.skips = [s0 + 4]
+	heart.call("feed", fake, 4200000, 0.0)
+	check(fake.pushed.size() == 4695 and _peak(fake.pushed, 4395, 4695) == 0.0 and int(heart.get("_skips")) == s0 + 4,
+			"skips counted before a push restart it",
+			[fake.pushed.size(), _peak(fake.pushed, 4395, 4695), heart.get("_skips")])
+	# The queue runs dry while a push is synthesized: the engine played silence
+	# meanwhile, and what is pushed would resume in the middle of the sound. It
+	# fades in over FADE_FRAMES instead, and the heart takes the new skips.
+	PanicSystem.beat_phase = 0.0
+	_afresh(heart)
+	heart.set("_amp", 1.0)
+	var fade_in: int = HEARTBEAT_AUDIO.FADE_FRAMES
+	var s1: int = heart.get("_skips")
+	var fake2 := _FakePlayback.new()
+	fake2.skips = [s1]
+	heart.call("feed", fake2, 5000000, 0.0)
+	fake2.room = 300
+	fake2.skips = [s1, s1 + 1]  # during the push
+	heart.call("feed", fake2, 5186000, 0.0)
+	var faded := fake2.pushed.size() == 4395 and int(heart.get("_skips")) == s1 + 1
+	if faded:
+		for i in 300:
+			var x := HEARTBEAT_AUDIO.beat_sound((4095 + i) / mix, dub_rest) * minf(float(i) / fade_in, 1.0)
+			faded = faded and absf(fake2.pushed[4095 + i].x - x) < 0.000001
+	check(faded, "the queue ran dry while a push was made: it fades in, not resumed in the middle of the sound",
+			[fake2.pushed.size(), heart.get("_skips"), fake2.pushed[4100].x if fake2.pushed.size() > 4100 else null])
+
+	# Without seams (docs/ARCHITECTURE.md, «Без швов»): the engine drains the
+	# generator in blocks of ~10 ms, so the queue read in a frame is off by a
+	# few ms, differently each frame, and a heart speeding up was pushed at its
+	# old pace. The beat clock closes the gap by moving the next beat; the sound
+	# of a beat always starts at its beginning and goes on untouched. A big gap
+	# is leapt: only which beat comes next changes.
+	var steepest := TAU * 48.0 / mix  # the steepest a thump starts, per frame at loudness 1
+	var fade: int = HEARTBEAT_AUDIO.FADE_FRAMES
+	PanicSystem.beat_phase = 0.0
+	_afresh(heart)
+	var a: PackedVector2Array = heart.call("synth", 300 + fade, 0.0, 1.0)
+	var at: float = heart.get("beat_clock")
+	var b: PackedVector2Array = heart.call("synth", 300, (300 + fade) / mix + 0.04, 1.0)
+	var moved: float = float(heart.get("beat_clock")) - at
+	var nominal := 300 / mix / period
+	check(absf(b[0].x - a[a.size() - 1].x) <= steepest and absf(moved - 1.25 * nominal) < 0.000001,
+			"a queue read 40 ms off in the middle of a beat: the sound goes on without a jump, the next beat moves by at most a quarter",
+			[absf(b[0].x - a[a.size() - 1].x), steepest, moved / nominal])
+	var sent := 600 + fade
+	for n in 30:
+		heart.call("synth", 300, sent / mix + 0.007, 1.0)
+		sent += 300
+	var gap := wrapf(HEARTBEAT_AUDIO.since_beat_at(0.0, period, sent / mix + 0.007) / period
+			- float(heart.get("beat_clock")), -0.5, 0.5) * period
+	check(absf(gap) < 0.0005, "kept 7 ms off, the gap is closed within 0.4 s of sound", gap)
+	# The same the other way: a queue read 40 ms short slows the clock by at
+	# most a quarter; kept 7 ms short, the gap is closed as well.
+	PanicSystem.beat_phase = 0.0
+	_afresh(heart)
+	a = heart.call("synth", 300 + fade, 0.04, 1.0)
+	at = heart.get("beat_clock")
+	b = heart.call("synth", 300, (300 + fade) / mix, 1.0)
+	moved = float(heart.get("beat_clock")) - at
+	check(absf(b[0].x - a[a.size() - 1].x) <= steepest and absf(moved - 0.75 * nominal) < 0.000001,
+			"a queue read 40 ms short in the middle of a beat: no jump, the next beat comes at most a quarter later",
+			[absf(b[0].x - a[a.size() - 1].x), steepest, moved / nominal])
+	sent = 600 + fade
+	for n in 30:
+		heart.call("synth", 300, sent / mix - 0.007, 1.0)
+		sent += 300
+	gap = wrapf(HEARTBEAT_AUDIO.since_beat_at(0.0, period, sent / mix - 0.007) / period
+			- float(heart.get("beat_clock")), -0.5, 0.5) * period
+	check(absf(gap) < 0.0005, "kept 7 ms short, the gap is closed within 0.4 s of sound", gap)
+
+	# A leap that crosses no beat: the clock jumps, the beat sounding goes on.
+	PanicSystem.beat_phase = 0.0
+	_afresh(heart)
+	heart.call("synth", 441, 0.0, 1.0)  # 0.02 s into a beat
+	PanicSystem.beat_phase = 0.3  # 0.25 s further on: a reset, a new time scale
+	var c: PackedVector2Array = heart.call("synth", 600, 441 / mix, 1.0)
+	var same := true
+	for i in 600:
+		same = same and absf(c[i].x - HEARTBEAT_AUDIO.beat_sound((441 + i) / mix, dub_rest)) < 0.000001
+	check(same and absf(float(heart.get("beat_clock")) - (0.3 + 1041 / mix / period)) < 0.000001,
+			"a gap of 0.25 s is leapt: the clock is PanicSystem's at once, the beat sounding plays on untouched",
+			[c[0].x, heart.get("beat_clock")])
+	# Forward over a beat that began 0.04 s ago (a fright from rest): it starts
+	# at once from its beginning, heard 0.04 s late, within the breath window.
+	_sounding(heart, 0.6, 0.5, dub_rest)  # the last beat has died away
+	PanicSystem.beat_phase = 0.05
+	var d: PackedVector2Array = heart.call("synth", 600, 0.0, 1.0)
+	var started := true
+	for i in 600:
+		started = started and absf(d[i].x - HEARTBEAT_AUDIO.beat_sound(i / mix, dub_rest)) < 0.000001
+	check(started and float(heart.get("last_onset_ahead")) == 0.0,
+			"leapt over a beat 0.04 s back: that beat starts from its beginning at once, not mid-sound", [d[50].x, heart.get("last_onset_ahead")])
+	# Forward over a beat that began 0.21 s ago, beyond the window (0.16 s):
+	# no beat now; the next one comes on time.
+	_sounding(heart, 0.8, 0.5, dub_rest)
+	PanicSystem.beat_phase = 0.25
+	var e: PackedVector2Array = heart.call("synth", 600, 0.0, 1.0)
+	var no_beat := _peak(e, 0, 600) == 0.0 and float(heart.get("last_onset_ahead")) < 0.0
+	heart.call("synth", 20000, 600 / mix, 1.0)
+	check(no_beat and absf(float(heart.get("last_onset_ahead")) - 0.75 * period) < 0.00001,
+			"leapt over a beat too long ago to stand for it: none now, the next on time",
+			[_peak(e, 0, 600), heart.get("last_onset_ahead")])
+	# Forward over a beat that began 0.054 s ago, while the beat sounding began
+	# 0.0675 s ago (two steps in panic in a row): that one stands for it, no
+	# second attack 0.01 s after the first.
+	_sounding(heart, 0.887, 0.0675, dub_rest)
+	PanicSystem.beat_phase = 0.065
+	var g: PackedVector2Array = heart.call("synth", 600, 0.0, 1.0)
+	var stands := float(heart.get("last_onset_ahead")) < 0.0
+	for i in 600:
+		stands = stands and absf(g[i].x - HEARTBEAT_AUDIO.beat_sound(0.0675 + i / mix, dub_rest)) < 0.000001
+	check(stands, "leapt over a beat the one sounding began near: it stands for it, no second attack", g[100].x)
+	# The same after the engine's silence: nothing sounds, but the beat heard
+	# 0.0675 s ago still stands for this one.
+	_sounding(heart, 0.887, 0.0675, dub_rest)
+	heart.set("_since", INF)
+	PanicSystem.beat_phase = 0.065
+	g = heart.call("synth", 600, 0.0, 1.0)
+	check(_peak(g, 0, 600) == 0.0 and float(heart.get("last_onset_ahead")) < 0.0,
+			"leapt over a beat heard just before the engine's silence: it stands, not heard again", _peak(g, 0, 600))
+	# Back over the beat that began 0.04 s ago (panic falling in a step, a
+	# smaller «Задержка звука»): it was early for the beat ahead, 0.125 s off,
+	# within the window, and stands for it; that beat is not played again.
+	_sounding(heart, 0.05, 0.05 * period, dub_rest)
+	PanicSystem.beat_phase = 0.9
+	var f: PackedVector2Array = heart.call("synth", 4000, 0.0, 1.0)
+	var once := float(heart.get("last_onset_ahead")) < 0.0
+	for i in 4000:
+		once = once and absf(f[i].x - HEARTBEAT_AUDIO.beat_sound(0.05 * period + i / mix, dub_rest)) < 0.000001
+	heart.call("synth", 20000, 4000 / mix, 1.0)
+	check(once and absf(float(heart.get("last_onset_ahead")) - 1.1 * period) < 0.00001,
+			"leapt back over the beat sounding: it stands for the one ahead, which is not played twice; the one after on time",
+			[f[2000].x, heart.get("last_onset_ahead")])
+	# Back over a beat that began 0.125 s ago: 0.21 s from the beat ahead, too
+	# far to stand for it; that one is played.
+	_sounding(heart, 0.15, 0.15 * period, dub_rest)
+	PanicSystem.beat_phase = 0.9
+	heart.call("synth", 4000, 0.0, 1.0)
+	check(absf(float(heart.get("last_onset_ahead")) - 0.1 * period) < 0.00001,
+			"leapt back over a beat too far from the one ahead: that one is played", heart.get("last_onset_ahead"))
+	# Back without crossing a beat, to 0.08 s past one, while the beat sounding
+	# began 0.18 s ago, 0.1 s before it (the beats queued before «Задержка
+	# звука» was lowered are heard early by as much): within the window, it
+	# stands for it, and that beat is not started again.
+	_sounding(heart, 0.3, 0.18, dub_rest)
+	PanicSystem.beat_phase = 0.08 / period
+	var early: PackedVector2Array = heart.call("synth", 600, 0.0, 1.0)
+	var kept := float(heart.get("last_onset_ahead")) < 0.0
+	for i in 600:
+		kept = kept and absf(early[i].x - HEARTBEAT_AUDIO.beat_sound(0.18 + i / mix, dub_rest)) < 0.000001
+	check(kept, "leapt back to just after a beat the one sounding came early for: it stands, no second attack",
+			[early[100].x, heart.get("last_onset_ahead")])
+	# Back without crossing a beat, into the breath window after one (a smaller
+	# «Задержка звука»; or a fright from rest with a long one, a gap of more
+	# than half a beat reading as backwards). The beat sounding began 0.3 s
+	# before that one, too far to stand for it: that one starts at once.
+	_sounding(heart, 0.4, 0.4 * period, dub_rest)
+	PanicSystem.beat_phase = 0.04
+	var back: PackedVector2Array = heart.call("synth", 600, 0.0, 1.0)
+	var caught_up := float(heart.get("last_onset_ahead")) == 0.0
+	for i in 600:
+		caught_up = caught_up and absf(back[i].x - (HEARTBEAT_AUDIO.beat_sound(i / mix, dub_rest)
+				+ HEARTBEAT_AUDIO.beat_sound(0.4 * period + i / mix, dub_rest))) < 0.000001
+	check(caught_up, "leapt back into the window after a beat the one sounding is far from: that beat starts at once",
+			[back[50].x, heart.get("last_onset_ahead")])
+	# A beat crossed at the end of a push sped up 8 times (bots) is placed by
+	# the step that crossed it, not by the next push's, 8 times smaller.
+	var big := 8.0 / mix / period
+	heart.set("_last_step", big)
+	_sounding(heart, 1.0 + 0.5 * big, 0.5, dub_rest)
+	PanicSystem.beat_phase = 0.5 * big
+	heart.call("synth", 10, 0.0, 1.0)
+	check(absf(float(heart.get("last_onset_ahead")) + 0.5 / mix) < 0.0000001,
+			"a beat crossed between two pushes is placed by the step that crossed it", heart.get("last_onset_ahead"))
+	PanicSystem.beat_phase = 0.9995  # a beat in 9 frames
+	_sounding(heart, 0.9995, 0.2, 0.18)  # inside the second sound of the beat before
+	heart.set("_amp", 1.0)
+	var tail: PackedVector2Array = heart.call("synth", 60, 0.0, 1.0)
+	var worst := 0.0
+	for i in range(1, 60):
+		worst = maxf(worst, absf(tail[i].x - tail[i - 1].x))
+	check(float(heart.get("last_onset_ahead")) > 0.0 and worst <= 2.0 * steepest,
+			"the next beat does not cut the one before short: its tail plays on", worst / steepest)
+	# Two catch-ups in a row, 80 ms apart, in a racing heart: the beat started
+	# 80 ms before, and the one 80 ms before that, still sounding, play on
+	# under the new one; none is cut off.
+	PanicSystem.level = 1.0
+	PanicSystem.floor_level = 1.0
+	PanicSystem.beat_phase = 0.0
+	_afresh(heart)
+	heart.set("_amp", 1.0)
+	var three: PackedVector2Array = heart.call("synth", 1764, 0.0, 1.0)
+	var restarted := []
+	for n in 2:
+		PanicSystem.beat_phase = 0.01
+		three.append_array(heart.call("synth", 1764, 0.0, 1.0))
+		restarted.append(heart.get("last_onset_ahead"))
+	worst = 0.0
+	for i in range(1, three.size()):
+		worst = maxf(worst, absf(three[i].x - three[i - 1].x))
+	PanicSystem.reset()
+	check(restarted == [0.0, 0.0] and worst <= 2.0 * steepest,
+			"two beats started at once in a row: the ones still sounding play on, none cut off",
+			[restarted, worst / steepest])
+	# Loudness changing in the loud part of a beat (a fright, the breath let go)
+	# glides over 10 ms instead of jumping, then the beat is as loud as asked.
+	PanicSystem.beat_phase = 0.0
+	_afresh(heart)
+	heart.set("_amp", 1.0)
+	var loud: PackedVector2Array = heart.call("synth", 331, 0.0, 1.0)  # 15 ms into a beat
+	var soft: PackedVector2Array = heart.call("synth", 300, 331 / mix, 0.2)
+	worst = absf(soft[0].x - loud[330].x)
+	for i in range(1, 300):
+		worst = maxf(worst, absf(soft[i].x - soft[i - 1].x))
+	var asked := 0.2 * HEARTBEAT_AUDIO.beat_sound((331 + fade) / mix, dub_rest)
+	check(absf(loud[330].x) > 0.3 and worst <= 2.0 * steepest and absf(soft[fade].x - asked) < 0.000001,
+			"loudness changed in the middle of a beat glides over 10 ms, without a jump",
+			[loud[330].x, worst / steepest, soft[fade].x, asked])
+
+	# Panic changing as in play, through a model of the engine's audio path
+	# (_heart_story): the breath held and let go, a rise, frights, decay. No
+	# seam anywhere, and each beat heard close to PanicSystem's: within 15 ms,
+	# and within 60 ms in the 0.35 s after a fright (pushed 0.19 s ahead at the
+	# old pace, then closed at most a quarter of a step a push); and centred on
+	# it, the middle of those offsets within 4 ms (without what the engine holds
+	# after the queue, the beats were heard about 10 ms late).
+	var in_play := func(t: float) -> float:
+		if t >= 4.2:
+			return 1.0 - (t - 4.2) * 0.06
+		if t >= 2.5:
+			return 0.75 - (t - 2.5) * 0.06
+		if t >= 1.0:
+			return (t - 1.0) * 0.3
+		return 0.0
+	var story := _heart_story(heart, in_play, 5.5, 0.0, true)
+	var off: Array[float] = []
+	var calm: Array[float] = []
+	var late_ok := true
+	for h: float in story["heard"]:
+		if h < 0.5 or h > 5.2:
+			continue
+		var best := INF
+		for bt: float in story["beats"]:
+			if absf(h - bt) < absf(best):
+				best = h - bt
+		off.append(best)
+		var fright := (h >= 2.5 and h < 2.85) or (h >= 4.2 and h < 4.55)
+		if not fright:
+			calm.append(best)
+		late_ok = late_ok and absf(best) <= (0.06 if fright else 0.015)
+	calm.sort()
+	var middle := INF
+	if not calm.is_empty():
+		middle = 0.5 * (calm[(calm.size() - 1) / 2] + calm[calm.size() / 2])
+	check(story["seam"] < 0 and not story["dry"] and off.size() >= 8 and late_ok and absf(middle) <= 0.004,
+			"panic changing as in play: no seam, each beat heard on PanicSystem's (within 15 ms, 60 ms after a fright, centred within 4 ms)",
+			[story["seam"], middle, off])
+
+	# Steps in panic big enough to leap (a fright from rest, a step down, a
+	# long «Задержка звука») and «Задержка звука» changed in the menu (lowered
+	# at rest and in panic; raised by more than half a beat), each at six
+	# moments across a beat: no seam; no two beats heard closer than the breath
+	# window, nor two attacks within the window of one beat; and every beat
+	# from the first frame pushed after the step on (less the window, plus 15
+	# ms for the heart's estimate of the queue) heard within the window of
+	# PanicSystem's. The attacks are found in the sound with the loudness the
+	# heart gave each frame divided out, over one still ringing too; the
+	# second sound of a beat (by the panic it was made at) is not one, and a
+	# beat the heart began within 40 ms of a second sound, too close to tell
+	# apart, is taken at its word. The beats queued before the step stay
+	# where they were.
+	var bad: Array = []
+	for case in [[0.0, 1.0, 0.0, 0.0], [0.0, 0.3, 0.3, 0.3], [0.5, 0.3, 0.3, 0.3], [0.2, 0.0, 0.1, 0.1],
+			[0.0, 1.0, 0.3, 0.3], [0.0, 0.0, 0.0, 0.3], [0.5, 0.5, 0.3, 0.0], [0.0, 0.0, 0.0, 0.1],
+			[0.3, 0.3, 0.0, 0.1]]:
+		for m in 6:
+			var step_at := 1.0 + m * rest / 6.0
+			var lv0: float = case[0]
+			var lv1: float = case[1]
+			var phys: float = case[2]  # «Задержка звука» the player really has
+			var believed0: float = case[3]  # the one set before the step
+			var stepped := func(t: float) -> float: return lv1 if t >= step_at else lv0
+			var believed := func(t: float) -> float: return phys if t >= step_at else believed0
+			var s2 := _heart_story(heart, stepped, step_at + 1.6, phys, false, believed, step_at)
+			var heard0: float = s2["heard0"]
+			var per_frame: float = s2["per_frame"]
+			var frontier: float = s2["frontier"]
+			var dub0 := HEARTBEAT_AUDIO.dub_delay(60.0 / lerpf(72.0, 165.0, lv0)) * mix
+			var dub1 := HEARTBEAT_AUDIO.dub_delay(60.0 / lerpf(72.0, 165.0, lv1)) * mix
+			var dub_at := func(y: int) -> float: return dub0 if heard0 + y * per_frame < frontier else dub1
+			var attacks: Array[float] = []
+			for k2: int in _attacks(s2["sound"], s2["level"], dub_at, s2["onsets"]):
+				attacks.append(heard0 + k2 * per_frame)
+			var w := minf(0.16, 0.2 * 60.0 / lerpf(72.0, 165.0, lv1))  # the breath window after the step
+			var twice := false  # two attacks within one window: which is the beat?
+			for j in range(1, attacks.size()):
+				twice = twice or attacks[j] - attacks[j - 1] < w
+			var reported: Array[float] = s2["heard"]
+			for j in range(1, reported.size()):
+				twice = twice or reported[j] - reported[j - 1] < w
+			var judged_from := frontier - w + 0.015
+			var missed := 0
+			for bt: float in s2["beats"]:
+				if bt < judged_from or bt > step_at + 1.4:
+					continue
+				var near := 0
+				for at2: float in attacks:
+					if absf(at2 - bt) <= w:
+						near += 1
+				if near == 0:
+					missed += 1
+				twice = twice or near > 1
+			if s2["seam"] >= 0 or s2["dry"] or twice or missed > 0:
+				bad.append([case, m, s2["seam"], twice, missed])
+	check(bad.is_empty(), "frights from rest, steps down, «Задержка звука» set and changed: no seam, no beat twice, each beat in its window", bad)
+	PanicSystem.reset()
+	heart.queue_free()
+
+	# The slider shows the saved delay when built and afresh each time the panel
+	# opens (it is shared by the main menu and the pause menu).
+	GameState.settings["sound_delay_ms"] = 70
+	var layer := CanvasLayer.new()
+	add_child(layer)
+	var sp := SettingsPanel.new()
+	layer.add_child(sp)
+	await frames(2)
+	var slider: HSlider = sp._delay
+	check(slider != null and slider.min_value == 0.0 and slider.max_value == 300.0 and slider.step == 10.0
+			and slider.value == 70.0 and sp._delay_label.text.ends_with(": 70 мс"),
+			"«Задержка звука» in the settings: 0-300 ms in steps of 10, at the saved value",
+			[slider.value if slider != null else null, sp._delay_label.text])
+	GameState.settings["sound_delay_ms"] = 40
+	sp.focus()
+	check(slider.value == 40.0 and sp._delay_label.text.ends_with(": 40 мс"),
+			"opened again, it shows the delay as it is now", [slider.value, sp._delay_label.text])
+	slider.value = 150.0
+	check(is_equal_approx(GameState.sound_delay(), 0.15) and sp._delay_label.text.ends_with(": 150 мс"),
+			"moving it sets the delay at once and shows it", sp._delay_label.text)
+	slider.value = 0.0
+	layer.queue_free()
+	await frames(2)
+	if delay_was == null:
+		GameState.settings.erase("sound_delay_ms")
+	else:
+		GameState.settings["sound_delay_ms"] = delay_was
+	Engine.time_scale = scale_was
+
+
+## The heart starts afresh at its next synth(): no beat clock, no beat heard.
+static func _afresh(heart: Node) -> void:
+	heart.set("beat_clock", -1.0)
+	heart.set("_attack_age", INF)
+
+
+## The heart's clock at `clock`, the beat sounding (and heard last) begun
+## `since` s ago with its second sound `dub` s after the first, nothing before.
+static func _sounding(heart: Node, clock: float, since: float, dub: float) -> void:
+	heart.set("beat_clock", clock)
+	heart.set("_since", since)
+	heart.set("_attack_age", since)
+	heart.set("_dub", dub)
+	heart.set("_prev_since", INF)
+	heart.set("_old_since", INF)
+
+
+## The heart through a model of Godot 4.7.2's audio path (servers/audio/
+## audio_server.cpp, audio_stream.cpp; drivers/wasapi): the driver takes 480
+## frames at 48 kHz every 10 ms, the first time 3.7 ms after the first push;
+## the mixer makes 512 at a time, only when the last block is used up; the
+## resampler takes the generator's frames 128 at a time (the first 128 it took
+## at play() were silence); every sound is 64 frames late; then 10 ms of
+## driver latency and `phys` s of headphones («Задержка звука» as it really
+## is). 60 game frames a second, each pushing what the queue has room for,
+## with the lead the heart would compute: the queue, the time to the next mix,
+## what the engine holds (engine_lag), the latency and the delay it believes
+## (`believed_at(t)`, else `phys`). Panic set by `level_at(t)`; with `breath`,
+## the breath held from 0.3 to 0.8 s. Returns the sound as pushed (sound,
+## loudest: the loudness bound of each frame, level: the loudness the heart
+## gave it), frame k heard at heard0 + k * per_frame, PanicSystem's beats and
+## the beats the heart reported, in seconds heard (and onsets: the frames
+## they began at), the first seam (-1 if none), whether the queue ever ran
+## dry, and with `mark`, when the first frame pushed at or after it is heard
+## (frontier).
+func _heart_story(heart: Node, level_at: Callable, seconds: float, phys: float, breath: bool,
+		believed_at: Callable = Callable(), mark: float = -1.0) -> Dictionary:
+	var mix: float = HEARTBEAT_AUDIO.MIX_RATE
+	var steepest := TAU * 48.0 / mix
+	var inc := int(mix / 48000.0 * 65536.0)  # the resampler's step, 16.16 fixed point
+	PanicSystem.reset()
+	_afresh(heart)
+	heart.set("_amp", 0.0)
+	var now := [0.0]
+	var beats: Array[float] = []  # when PanicSystem beat
+	var on_beat := func() -> void:
+		beats.append(float(now[0]) - PanicSystem.beat_phase * PanicSystem.beat_period())
+	PanicSystem.heartbeat.connect(on_beat)
+	var frame := 1.0 / 60.0
+	var start := frame + 0.0037  # the first driver callback
+	var lag: float = HEARTBEAT_AUDIO.engine_lag(48000.0)
+	var per_frame := 65536.0 / inc / 48000.0
+	var heard0 := start + 0.01 + (130.0 * 65536.0 / inc + 64.0) / 48000.0 + phys
+	var sound := PackedFloat32Array()
+	var loudest := PackedFloat32Array()  # the loudest each frame can be
+	var level := PackedFloat32Array()  # how loud the heart made each frame
+	var heard: Array[float] = []
+	var onsets: Array[int] = []
+	var last_amp := 0.0
+	var played := 0  # frames the mixer has made
+	var to_mix := 0  # frames of its last block the driver has not taken yet
+	var calls := 0  # driver callbacks so far
+	var dry := false
+	var frontier := -1.0
+	for n in int(seconds * 60.0):
+		var t := n * frame
+		PanicSystem.level = level_at.call(t)
+		now[0] = t + frame
+		PanicSystem._process(frame)
+		var tn := t + frame  # PanicSystem's clock stands at the end of the frame: the push is then
+		while start + calls * 0.01 <= tn:
+			var todo := 480
+			while todo > 0:
+				if to_mix == 0:
+					played += 512
+					to_mix = 512
+				var c := mini(to_mix, todo)
+				todo -= c
+				to_mix -= c
+			calls += 1
+		var pulled := 128 * (((played - 1) * inc) / (128 * 65536)) if played > 0 else 0
+		var queued := sound.size() - pulled
+		if queued < 0:
+			dry = true
+			queued = 0
+		var room := 4095 - queued
+		if room <= 0:
+			continue
+		var believed: float = believed_at.call(t) if believed_at.is_valid() else phys
+		var lead := queued / mix + (start + calls * 0.01 - tn) + lag + 0.01 + believed
+		var amp := lerpf(0.05, 0.6, PanicSystem.level)
+		if breath and t >= 0.3 and t < 0.8:
+			amp = maxf(amp, HEARTBEAT_AUDIO.HOLD_AMP)  # the breath held, then let go
+		var base := sound.size()
+		if mark >= 0.0 and frontier < 0.0 and t >= mark:
+			frontier = heard0 + base * per_frame
+		var was: float = heart.get("_amp")
+		var out: PackedVector2Array = heart.call("synth", room, lead, amp)
+		var glide := absf(amp - was) / HEARTBEAT_AUDIO.FADE_FRAMES  # as synth() glides
+		for i in out.size():
+			sound.append(out[i].x)
+			loudest.append(maxf(amp, last_amp))
+			was = move_toward(was, amp, glide)
+			level.append(was)
+		last_amp = amp
+		var onset: float = heart.get("last_onset_ahead")
+		if onset >= 0.0:
+			heard.append(heard0 + (base + (onset - lead) * mix) * per_frame)
+			onsets.append(roundi(base + (onset - lead) * mix))
+	PanicSystem.heartbeat.disconnect(on_beat)
+	var seam := -1
+	for j in range(1, sound.size()):
+		if absf(sound[j] - sound[j - 1]) > 2.0 * steepest * loudest[j]:
+			seam = j
+			break
+	return {"sound": sound, "loudest": loudest, "level": level, "beats": beats, "heard": heard,
+			"onsets": onsets, "seam": seam, "dry": dry, "heard0": heard0, "per_frame": per_frame,
+			"frontier": frontier}
+
+
+## Frames of `sound` where a thump begins, over silence or over one still
+## ringing, in the sound with the loudness the heart gave each frame
+## (`level`) divided out (a loudness gliding over a ringing beat is not a
+## rise): where the loudest |x| over the next 6 ms reaches 0.3 and twice the
+## loudest over the 11 ms before (more than half a 48 Hz cycle, so a zero
+## crossing never reads as silence) plus 0.02; the attack is the first frame
+## rising 0.05 above that. At most one in 25 ms. Taken on the maxima of
+## 22-frame blocks (1 ms). A rise `dub_at.call(y)` frames (within 6 ms) after
+## an attack y is that beat's second sound: dropped, it starts no 25 ms; but
+## if the heart began a beat within 40 ms of it (`onsets`), closer than this
+## tells two rises apart, the two are heard as one, and that beat is kept.
+func _attacks(sound: PackedFloat32Array, level: PackedFloat32Array, dub_at: Callable,
+		onsets: Array[int]) -> Array[int]:
+	const BLOCK := 22
+	const PAST := 11
+	const NEXT := 6
+	var refractory := int(0.025 * HEARTBEAT_AUDIO.MIX_RATE)
+	var dub_tol := int(0.006 * HEARTBEAT_AUDIO.MIX_RATE)
+	var fuse := int(0.04 * HEARTBEAT_AUDIO.MIX_RATE)
+	var x := PackedFloat32Array()
+	x.resize(sound.size())
+	for k in sound.size():
+		x[k] = sound[k] / level[k] if level[k] > 0.0001 else 0.0
+	var blocks := x.size() / BLOCK
+	var peak := PackedFloat32Array()
+	peak.resize(blocks)
+	for bi in blocks:
+		var m := 0.0
+		for k in range(bi * BLOCK, bi * BLOCK + BLOCK):
+			m = maxf(m, absf(x[k]))
+		peak[bi] = m
+	var out: Array[int] = []
+	var last := -1000000
+	var bl := PAST
+	while bl < blocks - NEXT:
+		var k := bl * BLOCK
+		var ahead := 0.0
+		for c in range(bl, bl + NEXT):
+			ahead = maxf(ahead, peak[c])
+		var before := 0.0
+		for c in range(bl - PAST, bl):
+			before = maxf(before, peak[c])
+		if k - last >= refractory and ahead >= 0.3 and ahead >= 2.0 * before + 0.02:
+			var r := k
+			while r < k + NEXT * BLOCK and absf(x[r]) < before + 0.05:
+				r += 1
+			var second := false
+			for y: int in out:
+				second = second or absf(r - y - float(dub_at.call(y))) < dub_tol
+			if not second:
+				out.append(r)
+				last = r
+			else:
+				for o: int in onsets:
+					if absi(o - r) <= fuse and not out.has(o):
+						out.append(o)
+						last = o
+						break
+			bl = r / BLOCK + 1
+			continue
+		bl += 1
+	return out
+
+
+## A stand-in for AudioStreamGeneratorPlayback in HeartbeatAudio.feed():
+## `room` frames free, get_skips() giving `skips` in turn (the last one from
+## then on), what is pushed kept in `pushed`, the size of each push in `sizes`.
+class _FakePlayback:
+	extends RefCounted
+	var room := 4095
+	var skips: Array[int] = []
+	var pushed := PackedVector2Array()
+	var sizes := []
+
+	func get_frames_available() -> int:
+		return room
+
+	func get_skips() -> int:
+		var s: int = skips[0]
+		if skips.size() > 1:
+			skips.remove_at(0)
+		return s
+
+	func push_buffer(frames: PackedVector2Array) -> bool:
+		pushed.append_array(frames)
+		sizes.append(frames.size())
+		return true
+
+## Loudest sample of `buf` in the frames [from, to).
+static func _peak(buf: PackedVector2Array, from: int, to: int) -> float:
+	var m := 0.0
+	for i in range(maxi(from, 0), mini(to, buf.size())):
+		m = maxf(m, absf(buf[i].x))
+	return m
+
 
 func _test_perception() -> void:
 	Perception.reset()

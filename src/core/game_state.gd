@@ -18,7 +18,7 @@ const MENU_SCENE := "res://src/ui/main_menu.tscn"
 ## "keys": action -> physical keycode, only the keys changed by the player
 ## (Controls, the "Управление" screen).
 const DEFAULT_SETTINGS := {"mouse_sensitivity": 1.0, "volume": 0.8, "fullscreen": false, "keys": {},
-		"brightness": 1.0, "brightness_checked": false}
+		"brightness": 1.0, "brightness_checked": false, "sound_delay_ms": 0}
 ## Range of the brightness (the gamma lift in film_common.gdshaderinc).
 const BRIGHTNESS_MIN := 0.7
 const BRIGHTNESS_MAX := 1.6
@@ -168,6 +168,16 @@ func needs_brightness_check() -> bool:
 ## Multiplier for the player's mouse look.
 func mouse_factor() -> float:
 	return clampf(float(settings.get("mouse_sensitivity", 1.0)), 0.2, 3.0)
+
+
+## «Задержка звука»: what wireless headphones add and the engine cannot see
+## (HeartbeatAudio.lead_time; docs/ARCHITECTURE.md, «Удар слышен в такт»).
+const SOUND_DELAY_MAX_MS := 300.0
+
+
+## The player's extra sound delay, in seconds (0..0.3).
+func sound_delay() -> float:
+	return clampf(float(settings.get("sound_delay_ms", 0)), 0.0, SOUND_DELAY_MAX_MS) / 1000.0
 
 
 func save() -> void:
