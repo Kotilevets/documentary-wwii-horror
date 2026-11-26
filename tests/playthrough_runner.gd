@@ -28,7 +28,7 @@ extends Node
 ## And the door opened in the prologue ("Дверь открыта в прологе"): in the
 ## hay the shepherd comes along his trail and smells him out; in the cellar
 ## he sits out the same search, only without the knock.
-## Exit code = number of failures. Game time runs x4.
+## Exit code = failures + errors (tests/run_guard.gd). Game time runs x4.
 
 const ACT2_PATH := "res://src/scenes/act2_road/act2_road.tscn"
 const Bot := preload("res://tests/act2_bot.gd")
@@ -87,6 +87,9 @@ var _traces: Array = []  # [name, PackedVector3Array] for the map
 var _map_bot: Bot = null
 var _checkpoints_at: Array[Vector3] = []
 var _only := ""
+## tests/run_guard.gd: errors are failures, a hung run ends. Untyped, so that
+## this script still loads when that one does not (and then says so: _guarded).
+@onready var _guard = $RunGuard
 ## How each memory of the witness run ended (MemoryFlash.ended: cut off?).
 var _memories: Array[bool] = []
 ## Act I's escape for the map: its bot and its walks.
@@ -94,27 +97,31 @@ var _escape_bot: Escaper = null
 var _escape_traces: Array = []
 
 
-## Set on the first start. A level's failure path that reloads the current
-## scene reloads the runner itself, and it would start over without end
-## (found 19.11.2026: a failed Act III interrogation, mutation P52).
-static var _started := false
-
-
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	if _started:
-		print("FAIL  a level reloaded the current scene - the runner itself; the part left that failure path open"
-				+ " (the results of the parts before it are lost)")
+	# A level's failure path that reloads the current scene reloads the runner
+	# itself: the guard sees the second load, says so and quits (the part left
+	# that failure path open).
+	if not _guarded():
 		Engine.time_scale = 1.0
-		get_tree().quit(1)
 		return
-	_started = true
 	GameState.save_path = "user://test_playthrough.json"
 	GameState.reset()
 	await _run()
 	Engine.time_scale = 1.0
-	print("\n%d passed, %d failed" % [passes, failures])
-	get_tree().quit(failures)
+	_guard.finish(passes, failures)
+
+
+## Whether the run may start: not without the guard (tests/run_guard.gd did
+## not load - this runner then quits at once, or it would hang at its end),
+## not when the guard found this scene loaded a second time (it quits).
+func _guarded() -> bool:
+	if _guard == null or not _guard.has_method(&"finish"):
+		print("FAIL  tests/run_guard.gd did not load: no run without the guard (a parse error above)")
+		print("\n0 passed, 1 failed")
+		get_tree().quit(1)
+		return false
+	return _guard.first_start()
 
 
 func check(cond: bool, name: String, detail: Variant = "") -> void:
@@ -185,8 +192,13 @@ func _run() -> void:
 		_draw_escape_map()
 
 
+## Whether part `name` runs; when it does, tests/run_guard.gd names the
+## errors logged from now on with it.
 func _part(name: String) -> bool:
-	return _only == "" or _only == name
+	var run := _only == "" or _only == name
+	if run:
+		_guard.begin(name)
+	return run
 
 
 # --- a level to play -----------------------------------------------------------------

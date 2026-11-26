@@ -4,7 +4,7 @@ extends Node
 ## epilogue -> menu (+ pause: back to the menu). The unit tests set
 ## next_level = "" and never change scenes; this catches what they skip.
 ## Run:  godot --headless --path . res://tests/flow_runner.tscn
-## Exit code = number of failures. Game time runs x6.
+## Exit code = failures + errors (tests/run_guard.gd). Game time runs x6.
 ##
 ## The driver moves itself under the root so that it outlives the scene
 ## changes it causes.
@@ -15,11 +15,28 @@ const DREAM := "res://src/scenes/interlude_night/night_dream.tscn"
 
 var failures := 0
 var passes := 0
+## tests/run_guard.gd: errors are failures, a hung run ends. Untyped, so that
+## this script still loads when that one does not (and then says so: _guarded).
+@onready var _guard = $RunGuard
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if not _guarded():
+		return
 	_adopt.call_deferred()
+
+
+## Whether the run may start: not without the guard (tests/run_guard.gd did
+## not load - this runner then quits at once, or it would hang at its end),
+## not when the guard found this scene loaded a second time (it quits).
+func _guarded() -> bool:
+	if _guard == null or not _guard.has_method(&"finish"):
+		print("FAIL  tests/run_guard.gd did not load: no run without the guard (a parse error above)")
+		print("\n0 passed, 1 failed")
+		get_tree().quit(1)
+		return false
+	return _guard.first_start()
 
 
 func _adopt() -> void:
@@ -28,8 +45,7 @@ func _adopt() -> void:
 	tree.root.add_child(self)
 	await _run()
 	Engine.time_scale = 1.0
-	print("\n%d passed, %d failed" % [passes, failures])
-	get_tree().quit(failures)
+	_guard.finish(passes, failures)
 
 
 func check(cond: bool, name: String, detail: Variant = "") -> void:

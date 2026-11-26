@@ -1,6 +1,11 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://tests/test_runner.gd" id="1_tests"]
+[ext_resource type="Script" path="res://tests/run_guard.gd" id="2_guard"]
 
 [node name="TestRunner" type="Node"]
 script = ExtResource("1_tests")
+
+[node name="RunGuard" type="Node" parent="."]
+script = ExtResource("2_guard")
+deadline = 1800.0

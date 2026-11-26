@@ -1,8 +1,13 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://tests/flow_runner.gd" id="1_flow"]
+[ext_resource type="Script" path="res://tests/run_guard.gd" id="2_guard"]
 
 [node name="FlowRunner" type="Node"]
 
 [node name="Driver" type="Node" parent="."]
 script = ExtResource("1_flow")
+
+[node name="RunGuard" type="Node" parent="Driver"]
+script = ExtResource("2_guard")
+deadline = 300.0

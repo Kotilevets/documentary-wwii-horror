@@ -17,8 +17,8 @@ const POST_LAYER := 1 << 18
 @export var crouch_speed: float = 1.1
 @export var sprint_speed: float = 4.0
 @export var mouse_sensitivity: float = 0.0025
-## Right stick of a gamepad: radians a second at full tilt (times the
-## sensitivity setting); the tilt is squared for fine aim.
+## Right stick of a gamepad: radians a second at full tilt (the mouse
+## sensitivity setting does not change it); the tilt is squared for fine aim.
 @export var stick_look_speed: float = 2.6
 @export var base_fov: float = 75.0
 ## Degrees removed from FOV at PanicLevel 1 (tunnel vision).
@@ -190,7 +190,7 @@ func _process(delta: float) -> void:
 	var stick := Input.get_vector("look_left", "look_right", "look_up", "look_down")
 	if stick == Vector2.ZERO or is_input_locked() or get_tree().paused:
 		return
-	_look(stick * stick.length() * stick_look_speed * delta / mouse_sensitivity)
+	_look(stick * stick.length() * stick_look_speed * delta / mouse_sensitivity, false)
 
 
 ## The satchel open in a hiding place: the slits are a 2D layer over the
@@ -219,8 +219,11 @@ func _pick_in_satchel() -> void:
 		satchel.select_step(1 if x > 0.0 else -1)
 
 
-func _look(relative: Vector2) -> void:
-	relative *= GameState.mouse_factor()
+## `relative` in mouse pixels; `scaled`: times the mouse sensitivity setting
+## (the stick is not: docs/ARCHITECTURE.md, «Управление»).
+func _look(relative: Vector2, scaled := true) -> void:
+	if scaled:
+		relative *= GameState.mouse_factor()
 	if is_hidden or is_seated:
 		var yl := deg_to_rad(seated_yaw_limit if is_seated else hidden_yaw_limit)
 		var pl := deg_to_rad(seated_pitch_limit if is_seated else hidden_pitch_limit)

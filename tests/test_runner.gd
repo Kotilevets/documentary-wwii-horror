@@ -1,20 +1,40 @@
 extends Node
 ## Automated checks of the Act I slice. Run:
 ##   godot --headless --path . res://tests/test_runner.tscn
-## Exit code = number of failures.
+##   ... res://tests/test_runner.tscn -- --only=_test_invasion,_test_spotted
+## (just these groups of _run, in its order). Exit code = failures + errors
+## (tests/run_guard.gd).
 
 const LEVEL := preload("res://src/scenes/act1_village/act1_village.tscn")
 const NIGHT := preload("res://src/scenes/interlude_night/night_dream.tscn")
 
 var failures := 0
 var passes := 0
+## tests/run_guard.gd: errors are failures, a hung run ends. Untyped, so that
+## this script still loads when that one does not (and then says so: _guarded).
+@onready var _guard = $RunGuard
+var _only: PackedStringArray = []
+var _ran: PackedStringArray = []
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	if not _guarded():
+		return
 	await _run()
-	print("\n%d passed, %d failed" % [passes, failures])
-	get_tree().quit(failures)
+	_guard.finish(passes, failures)
+
+
+## Whether the run may start: not without the guard (tests/run_guard.gd did
+## not load - this runner then quits at once, or it would hang at its end),
+## not when the guard found this scene loaded a second time (it quits).
+func _guarded() -> bool:
+	if _guard == null or not _guard.has_method(&"finish"):
+		print("FAIL  tests/run_guard.gd did not load: no run without the guard (a parse error above)")
+		print("\n0 passed, 1 failed")
+		get_tree().quit(1)
+		return false
+	return _guard.first_start()
 
 
 func check(cond: bool, name: String, detail: Variant = "") -> void:
@@ -32,72 +52,90 @@ func frames(n: int) -> void:
 
 
 func _run() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--only="):
+			_only = arg.trim_prefix("--only=").split(",", false)
 	# Never touch the player's real progress.
 	GameState.save_path = "user://test_progress.json"
 	GameState.reset()
 	GunfireAmbience.muted = true  # random distant shots would jolt panic mid-test
-	_test_panic()
-	await _test_heartbeat()
-	await _test_perception()
-	_test_archive()
-	_test_items()
-	_test_color_mask()
-	_test_sound_bank()
-	await _test_level()
-	await _test_navigation_and_dog()
-	await _test_nav_source()
-	await _test_invasion()
-	await _test_invasion_return()
-	await _test_invasion_out_too_early()
-	await _test_invasion_found()
-	await _test_invasion_behind_door()
-	await _test_invasion_dog_at_door()
-	await _test_torch_leak()
-	await _test_search_checks()
-	await _test_invasion_stove_nook()
-	await _test_gunfire()
-	await _test_footsteps()
-	await _test_hiding_sound()
-	await _test_occlusion()
-	await _test_light()
-	await _test_sight_points()
-	await _test_lean()
-	await _test_trauma_echo()
-	await _test_breath_cues()
-	await _test_action_noise()
-	await _test_door_leaf()
-	await _test_dog_at_shut_door()
-	await _test_held_door()
-	await _test_hearing_walls()
-	await _test_capture()
-	await _test_spotted()
-	await _test_winded()
-	await _test_hunger()
-	await _test_wound()
-	await _test_board_steps()
-	await _test_scent_trail()
-	await _test_phantoms()
-	await _test_phantom_figures()
-	await _test_memory()
-	await _test_forest_ending()
-	await _test_night_dream()
-	await _test_act2()
-	await _test_act2_checkpoints()
-	await _test_wire_gap()
-	await _test_patrol_rounds()
-	_test_pass_rules()
-	_test_interrogation_rules()
-	await _test_act3()
-	await _test_act3_bad_pass()
-	await _test_act3_resume()
-	await _test_act3_glance()
-	_test_briefing_legend()
-	await _test_act3_arrests()
-	await _test_game_state()
-	await _test_menus()
-	await _test_controls()
-	await _test_brightness()
-	await _test_flashes()
+	await _group(_test_panic)
+	await _group(_test_heartbeat)
+	await _group(_test_perception)
+	await _group(_test_archive)
+	await _group(_test_items)
+	await _group(_test_color_mask)
+	await _group(_test_sound_bank)
+	await _group(_test_level)
+	await _group(_test_navigation_and_dog)
+	await _group(_test_nav_source)
+	await _group(_test_invasion)
+	await _group(_test_invasion_return)
+	await _group(_test_invasion_out_too_early)
+	await _group(_test_invasion_found)
+	await _group(_test_invasion_behind_door)
+	await _group(_test_invasion_dog_at_door)
+	await _group(_test_torch_leak)
+	await _group(_test_search_checks)
+	await _group(_test_invasion_stove_nook)
+	await _group(_test_gunfire)
+	await _group(_test_footsteps)
+	await _group(_test_hiding_sound)
+	await _group(_test_occlusion)
+	await _group(_test_light)
+	await _group(_test_sight_points)
+	await _group(_test_lean)
+	await _group(_test_trauma_echo)
+	await _group(_test_breath_cues)
+	await _group(_test_action_noise)
+	await _group(_test_door_leaf)
+	await _group(_test_dog_at_shut_door)
+	await _group(_test_held_door)
+	await _group(_test_hearing_walls)
+	await _group(_test_capture)
+	await _group(_test_spotted)
+	await _group(_test_winded)
+	await _group(_test_hunger)
+	await _group(_test_wound)
+	await _group(_test_board_steps)
+	await _group(_test_scent_trail)
+	await _group(_test_phantoms)
+	await _group(_test_phantom_figures)
+	await _group(_test_memory)
+	await _group(_test_forest_ending)
+	await _group(_test_night_dream)
+	await _group(_test_act2)
+	await _group(_test_act2_checkpoints)
+	await _group(_test_wire_gap)
+	await _group(_test_patrol_rounds)
+	await _group(_test_pass_rules)
+	await _group(_test_interrogation_rules)
+	await _group(_test_act3)
+	await _group(_test_act3_bad_pass)
+	await _group(_test_act3_resume)
+	await _group(_test_act3_glance)
+	await _group(_test_briefing_legend)
+	await _group(_test_act3_arrests)
+	await _group(_test_game_state)
+	await _group(_test_menus)
+	await _group(_test_controls)
+	await _group(_test_brightness)
+	await _group(_test_flashes)
+	# A misspelt group would run nothing and pass.
+	for g in _only:
+		check(_ran.has(g), "--only= names a group of _run", g)
+
+
+## One group of _run: skipped unless --only= names it (or there is no
+## --only=); tests/run_guard.gd names the errors it logs with it.
+func _group(test: Callable) -> void:
+	var g := String(test.get_method())
+	if not _only.is_empty() and not _only.has(g):
+		return
+	_ran.append(g)
+	_guard.begin(g)
+	await test.call()
+	_guard.end(g)
 
 
 # --- systems -------------------------------------------------------------------
@@ -4840,23 +4878,27 @@ func _test_controls() -> void:
 	fake.queue_free()
 	await frames(2)
 
-	# The right stick turns him; a light tilt turns him slowly.
+	# The right stick turns him; a light tilt turns him slowly. As rates
+	# (_stick_rate), not angles after a set wait: load stretches the wait.
 	var w := await _search_world()
 	var player := w.player as Player
+	var full := await _stick_rate(player, 1.0)
+	check(full > 2.2 and full < 3.0, "the right stick turns him (about 2.6 rad/s)", full)
+	await _passes()
 	var yaw := player.rotation.y
-	Input.action_press("look_right", 1.0)
-	await _wait(0.4)
-	Input.action_release("look_right")
-	var full := yaw - player.rotation.y
-	check(full > 0.5 and full < 1.6, "the right stick turns him (about 2.6 rad/s)", full)
-	yaw = player.rotation.y
-	await _wait(0.2)
-	check(absf(player.rotation.y - yaw) < 0.001, "and he stops when it is let go")
-	Input.action_press("look_right", 0.35)
-	await _wait(0.4)
-	Input.action_release("look_right")
-	var light := yaw - player.rotation.y
-	check(light > 0.0 and light < full * 0.25, "a light tilt turns him slowly, for fine aim", [light, full])
+	await _passes(3)
+	check(absf(angle_difference(yaw, player.rotation.y)) < 0.0001, "and he stops when it is let go")
+	var light := await _stick_rate(player, 0.35)
+	# Quadratic past the dead zone: Input.get_vector maps 0.35 to
+	# (0.35 - 0.15) / 0.85 of full tilt, and the player squares it.
+	var want := pow(inverse_lerp(Controls.STICK_DEADZONE, 1.0, 0.35), 2.0)
+	check(light > 0.0 and absf(light / full - want) < want * 0.1,
+			"a light tilt turns him slowly, for fine aim (quadratic past the dead zone)", [light, full, want])
+	GameState.set_setting("mouse_sensitivity", 2.0)
+	var doubled := await _stick_rate(player, 1.0)
+	GameState.set_setting("mouse_sensitivity", 1.0)
+	check(absf(doubled - full) < full * 0.02, "the mouse sensitivity does not change the stick",
+			[doubled, full])
 	(w.root as Node).queue_free()
 	await frames(2)
 	GameState.reset()
@@ -6981,6 +7023,25 @@ func _until(cond: Callable, timeout: float) -> bool:
 			return false
 		await get_tree().process_frame
 	return true
+
+
+## Radians a second the right stick at `strength` turns him: the angle over
+## the very frames that turned him, divided by the sum of their delta (he
+## turns in _process by delta). process_frame comes before every _process,
+## so each pass adds the delta the player is about to turn by.
+func _stick_rate(player: Player, strength: float) -> float:
+	Input.action_press("look_right", strength)
+	await get_tree().process_frame
+	var yaw := player.rotation.y
+	var dt := 0.0
+	var n := 0
+	while dt < 0.3 or n < 5:
+		dt += get_process_delta_time()
+		n += 1
+		await get_tree().process_frame
+	var turned := angle_difference(player.rotation.y, yaw)
+	Input.action_release("look_right")
+	return turned / dt
 
 
 func _test_pass_rules() -> void:

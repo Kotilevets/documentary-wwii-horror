@@ -1,0 +1,124 @@
+extends AudioStreamPlayer
+## Synthesized heartbeat ("lub-dub") on PanicSystem's clock.
+## Placeholder until a recorded sound from docs/ASSETS_AND_REFS.md is chosen.
+##
+## A frame pushed into the generator is heard only after everything already
+## queued in it and the driver's own latency: about 0.19 s on Windows
+## (docs/ARCHITECTURE.md, «Удар слышен в такт»). Until 25.11.2026 each beat
+## was synthesized when PanicSystem.heartbeat fired, so it was heard that much
+## after the beat the breath is judged on (is_on_beat: +-0.16 s at rest).
+## Now every frame is synthesized for the moment it will be heard.
+
+const MIX_RATE := 22050.0
+const BUFFER_LENGTH := 0.15
+## The second sound follows the first by this much at rest...
+const DUB_DELAY := 0.18
+## ...and by no more than this share of the beat: a fixed 0.18 s split a
+## racing beat (0.36 s at 165 bpm) into two halves, the second sound halfway
+## between the beats.
+const DUB_SHARE := 0.22
+## Under a held breath the beats are never fainter than this, whatever the
+## panic: he can count them (docs/ARCHITECTURE.md, «Дыхание рвётся»).
+const HOLD_AMP := 0.3
+
+@onready var _player := get_parent() as Player
+
+## Loudness of the beats in the last frame pushed (tests).
+var heard_amp := 0.0
+## Seconds from the last synth() until the newest beat in it is heard, or -1.0
+## if it held no beat (tests, tools/heart_sync_probe.gd).
+var last_onset_ahead := -1.0
+## Time.get_ticks_usec() at which the newest beat pushed will be heard.
+var last_onset_usec := 0
+var _playback: AudioStreamGeneratorPlayback
+## Frames the generator holds when it is full.
+var _capacity := 0
+
+
+func _ready() -> void:
+	var gen := AudioStreamGenerator.new()
+	gen.mix_rate = MIX_RATE
+	gen.buffer_length = BUFFER_LENGTH
+	stream = gen
+	play()
+	_playback = get_stream_playback() as AudioStreamGeneratorPlayback
+	# The engine's playback keeps only a bare pointer to its generator, and the
+	# audio thread still mixes it once (the fade-out) after this node is gone.
+	# Freed together with the node, the generator was read after free: the
+	# rare silent crash (exit 139) or hang on leaving a level
+	# (docs/ARCHITECTURE.md, "Известные ограничения прототипа"). Held by the
+	# playback, it lives exactly as long as the audio server can reach it.
+	_playback.set_meta(&"generator", gen)
+	_capacity = _playback.get_frames_available()
+
+
+func _process(_delta: float) -> void:
+	heard_amp = amplitude()
+	if _playback == null:
+		return
+	var room := _playback.get_frames_available()
+	if room <= 0:
+		return
+	_capacity = maxi(_capacity, room)
+	var now := Time.get_ticks_usec()
+	_playback.push_buffer(synth(room, lead_time(_capacity - room), heard_amp))
+	if last_onset_ahead >= 0.0:
+		last_onset_usec = now + int(last_onset_ahead * 1000000.0)
+
+
+## Seconds until a frame pushed now is heard, with `queued` frames already in
+## the generator: those frames, the driver's latency, and the player's
+## «Задержка звука» for wireless headphones the engine cannot see.
+static func lead_time(queued: int) -> float:
+	return float(queued) / MIX_RATE + AudioServer.get_output_latency() + GameState.sound_delay()
+
+
+## `frames` frames of the heart at loudness `amp`, the first one heard `lead`
+## seconds from now: each is the sound the heart makes at the moment it is
+## heard, on PanicSystem's clock. Sets last_onset_ahead.
+func synth(frames: int, lead: float, amp: float) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	out.resize(frames)
+	var period := PanicSystem.beat_period()
+	var dub := dub_delay(period)
+	var phase := PanicSystem.beat_phase
+	var scale := Engine.time_scale
+	last_onset_ahead = -1.0
+	var prev := since_beat_at(phase, period, lead - 1.0 / MIX_RATE)
+	for i in frames:
+		var ahead := lead + i / MIX_RATE
+		var t := since_beat_at(phase, period, ahead)
+		if t < prev:  # a beat falls between this frame and the one before
+			last_onset_ahead = ahead - t / scale
+		prev = t
+		var s := (_thump(t) + 0.7 * _thump(t - dub)) * amp
+		out[i] = Vector2(s, s)
+	return out
+
+
+## Seconds of game time since the last beat, `ahead` real seconds from now,
+## with the beat at `phase` now and `period` long (PanicSystem's clock runs on
+## game time; the tests and bots speed it up).
+static func since_beat_at(phase: float, period: float, ahead: float) -> float:
+	return fposmod(phase + ahead * Engine.time_scale / period, 1.0) * period
+
+
+## How long after the first sound of a beat the second one comes.
+static func dub_delay(period: float) -> float:
+	return minf(DUB_DELAY, DUB_SHARE * period)
+
+
+## Loudness of the beats now: from the panic, and not below HOLD_AMP while
+## he holds his breath.
+func amplitude() -> float:
+	var amp := lerpf(0.05, 0.6, PanicSystem.level)
+	var b: BreathControl = _player.breath if _player != null else null
+	if b != null and b.cues and b.holding:
+		amp = maxf(amp, HOLD_AMP)
+	return amp
+
+
+static func _thump(t: float) -> float:
+	if t < 0.0 or t > 0.15:
+		return 0.0
+	return sin(TAU * 48.0 * t) * exp(-t * 30.0)
