@@ -67,6 +67,14 @@ var _leak_gain := 1.0
 ## 0..1: how far the door of the hiding place has been swung open by a
 ## searcher (the crack widens into the whole view).
 var _opened_k := 0.0
+## The torch light in the gaps may turn back - brighten after dimming, or
+## dim after brightening - only this long after it last turned, s; until
+## then it stays where it is. A beam grazing the edge of the stove or the
+## table would otherwise flash in the gaps (docs/ARCHITECTURE.md,
+## "Вспышки и мерцание").
+const LEAK_MIN_SWING := 0.5
+var _leak_dir := 0
+var _leak_swing_age := 0.0
 var _flinch_tween: Tween = null
 ## The view's dip in a flinch and its rise and fall with each breath when
 ## he is out of breath, with the tremble of his ragged breath in hiding
@@ -159,11 +167,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif satchel.is_open and event.is_action_pressed("interact"):
 		use_item(satchel.selected_item())
 	elif event.is_action_pressed("interact") and not is_input_locked() and not busy():
-		try_interact()
+		if not _swaps_view_on_interact() or Flicker.allow_swap():
+			try_interact()
 	elif event.is_action_pressed("inventory") and not busy():
-		satchel.toggle()
+		# In a hiding place the satchel takes the whole view (_update_rummage).
+		if not is_hidden or Flicker.allow_swap():
+			satchel.toggle()
 	elif event.is_action_pressed("archive_journal"):
-		archive_ui.open_journal()
+		if Flicker.allow_swap():
+			archive_ui.open_journal()
 
 
 func _process(delta: float) -> void:
@@ -219,6 +231,18 @@ func _look(relative: Vector2) -> void:
 	_pitch = clampf(_pitch - relative.y * mouse_sensitivity, deg_to_rad(-80), deg_to_rad(80))
 	head.rotation.x = _pitch
 	_clamp_lean()
+
+
+## E into or out of a hiding place swaps the whole view (the boards): such
+## a press waits for Flicker.allow_swap(), like the journal and the pause.
+func _swaps_view_on_interact() -> bool:
+	if is_hidden:
+		return true
+	if is_seated:
+		return false
+	interact_ray.force_raycast_update()
+	var target := interact_ray.get_collider()
+	return target is HideSpot and (target as HideSpot).can_interact(self)
 
 
 func try_interact() -> bool:
@@ -527,9 +551,9 @@ func _update_torch_leak(delta: float) -> void:
 		var p := current_hide_spot.leak_point()
 		for e in get_tree().get_nodes_in_group("enemies"):
 			target = maxf(target, (e as Enemy).torch_light_at(p))
-	torch_leak = move_toward(torch_leak, minf(target * 2.5, 1.0), 4.0 * delta)
+	_follow_leak(minf(target * 2.5, 1.0), delta)
 	var mat := hide_overlay.material as ShaderMaterial
-	mat.set_shader_parameter("leak", torch_leak * _leak_gain)
+	mat.set_shader_parameter("leak", shown_leak())
 	if is_hidden and current_hide_spot != null and current_hide_spot.is_open and _opened_k == 0.0:
 		# The doors swing open: the room comes in loud and clear.
 		Sfx.set_muffle(Sfx.OPEN_AIR, 0.0, current_hide_spot.open_delay)
@@ -538,6 +562,32 @@ func _update_torch_leak(delta: float) -> void:
 		mat.set_shader_parameter("slit_width", lerpf(current_hide_spot.slit_width, 1.6, _opened_k))
 	if torch_leak > 0.2:
 		PanicSystem.apply_continuous(0.35 * torch_leak, delta)
+
+
+## The torch light in the gaps moves towards `goal` at 4 a second, but turns
+## back no sooner than LEAK_MIN_SWING after it last turned.
+func _follow_leak(goal: float, delta: float) -> void:
+	_leak_swing_age += delta
+	var dir := 0
+	if goal > torch_leak + 0.0001:
+		dir = 1
+	elif goal < torch_leak - 0.0001:
+		dir = -1
+	if dir == 0:
+		return
+	if dir != _leak_dir:
+		if _leak_dir != 0 and _leak_swing_age < LEAK_MIN_SWING:
+			return  # too soon to turn back: the light stays where it is
+		_leak_dir = dir
+		_leak_swing_age = 0.0
+	torch_leak = move_toward(torch_leak, goal, 4.0 * delta)
+
+
+## What the overlay paints into the gaps: the leak by the gaps' width, gone
+## as the doors of the hiding place swing open - the room is lit by the real
+## beam then, not by dust trembling over half the screen.
+func shown_leak() -> float:
+	return torch_leak * _leak_gain * (1.0 - _opened_k)
 
 
 ## Boots on the boards over the hiding place (a cellar, HideSpot.under_floor):

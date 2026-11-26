@@ -46,10 +46,13 @@ void fragment() {
 	float half_w = slit_width * 0.5 * (0.7 + 0.6 * hash(id * 3.7));
 	float d = abs(f - 0.5 + wobble);
 	float open = 1.0 - smoothstep(half_w - 0.015, half_w + 0.015, d);
-	// Torch light through the gaps: brightest at the middle of a gap,
-	// with dust flicker along it.
+	// Torch light through the gaps: brightest at the middle of a gap, with
+	// dust in it - a still pattern along the gap and a faint tremble, 4 %
+	// twelve times a second: never a flash (docs/ARCHITECTURE.md, the
+	// section on flashes; 15 % at that rate made up to 5.5 flashes a second).
 	float core = 1.0 - smoothstep(0.0, half_w + 0.015, d);
-	float flicker = 0.85 + 0.15 * hash(floor(along * 40.0) + floor(TIME * 12.0));
+	float seg = floor(along * 40.0);
+	float flicker = 0.89 + 0.07 * hash(seg * 1.7 + 0.3) + 0.04 * hash(seg + floor(TIME * 12.0));
 	float spot = band < -0.5 ? 1.0 : mix(0.2, 1.0, exp(-pow((along - band) / band_width, 2.0)));
 	float light = open * leak * spot * (0.55 + 0.45 * core) * flicker;
 	vec3 pm = vec3(0.92) * light;

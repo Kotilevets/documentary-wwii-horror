@@ -44,6 +44,16 @@ func beat_period() -> float:
 	return 60.0 / bpm()
 
 
+## How far the panic tunnel closes in on this heartbeat (g_heartbeat at the
+## beat; film_common.gdshaderinc, frame_darkening): more with panic, 0.07
+## of the screen's radius at the top. The shader keeps any pixel from
+## darkening on the beat by more than PULSE_DY of luminance, so the pulse
+## is this deep in the dark and never a flash in a lit room
+## (docs/ARCHITECTURE.md, "Вспышки и мерцание").
+func pulse_depth() -> float:
+	return 0.05 * (0.25 + 0.75 * level) * (0.4 + level)
+
+
 ## The breath window round a heartbeat (docs/ARCHITECTURE.md, "Игрок",
 ## the beat window): at most BEAT_WINDOW seconds either side, and never more
 ## than BEAT_SHARE of the beat - a racing heart gives no more room, in shares
@@ -96,4 +106,4 @@ func _process(delta: float) -> void:
 	# Short pulse right after each beat, for the vignette.
 	var pulse := exp(-beat_phase * 9.0)
 	RenderingServer.global_shader_parameter_set("g_panic", level)
-	RenderingServer.global_shader_parameter_set("g_heartbeat", pulse * (0.25 + 0.75 * level))
+	RenderingServer.global_shader_parameter_set("g_heartbeat", pulse * pulse_depth())

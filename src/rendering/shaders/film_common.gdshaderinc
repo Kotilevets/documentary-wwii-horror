@@ -65,16 +65,31 @@ float film_grain(vec2 frag, float time) {
 	return hash12(frag + frame * 37.0) - 0.5;
 }
 
+// On a heartbeat no pixel darkens by more than this (linear luminance): under
+// the flash threshold of 0.1 however bright the room and however fast the
+// heart (docs/ARCHITECTURE.md, the section on flashes). In the dark the pulse
+// keeps its whole depth; only bright pixels throb less.
+const float PULSE_DY = 0.08;
+
 // Darkening of the frame: base vignette + panic "tunnel" + heartbeat pulse
-// + lack of air while holding the breath. Returns a multiplier 0..1.
-float frame_darkening(vec2 uv) {
+// (g_heartbeat: how far the tunnel closes in, PanicSystem.pulse_depth(), held
+// to PULSE_DY) + lack of air while holding the breath (g_air: the eased
+// BreathControl.shown_air). `l`: the pixel's brightest channel before the
+// darkening (its luminance is never above that). Returns a multiplier 0..1.
+float frame_darkening(vec2 uv, float l) {
 	vec2 d = uv - 0.5;
 	d.x *= 1.35;
 	float r = length(d);
-	float tunnel_radius = mix(0.62, 0.3, g_panic) - g_heartbeat * 0.05 * (0.4 + g_panic);
-	float v = smoothstep(tunnel_radius + 0.38, tunnel_radius, r);
+	float radius = mix(0.62, 0.3, g_panic);
+	float calm = smoothstep(radius + 0.38, radius, r);
+	float beat = smoothstep(radius - g_heartbeat + 0.38, radius - g_heartbeat, r);
 	float air_dark = smoothstep(1.0, 0.0, g_air) * smoothstep(0.15, 0.6, r);
-	return clamp(v * (1.0 - 0.8 * air_dark), 0.0, 1.0);
+	float air = 1.0 - 0.8 * air_dark;
+	float lit = max(l * air, 0.0001);
+	float y_calm = pow(clamp(lit * calm, 0.0, 1.0), 2.2);
+	float floor_v = pow(max(y_calm - PULSE_DY, 0.0), 1.0 / 2.2) / lit;
+	float v = max(beat, min(floor_v, calm));
+	return clamp(v * air, 0.0, 1.0);
 }
 
 // The player's brightness: shadows lift, black and white stay where they are.
@@ -87,7 +102,7 @@ vec3 film_finish(vec3 c, vec2 uv, vec2 frag, float time) {
 	c = brightness_lift(c);
 	float amount = mix(grain_calm, grain_panic, g_panic) * (0.4 + 0.6 * luma(c));
 	c += film_grain(frag, time) * amount;
-	c *= frame_darkening(uv);
+	c *= frame_darkening(uv, max(max(c.r, c.g), c.b));
 	return to_linear(clamp(c, 0.0, 1.0));
 }
 

@@ -39,11 +39,12 @@ func _process(delta: float) -> void:
 	_t += delta
 	if not is_instance_valid(lamp):
 		return  # the room is gone: he has woken up
-	var f := 1.0 - _flicker * (0.5 + 0.5 * sin(_t * 23.0) * sin(_t * 7.3))
-	lamp.light_energy = _lamp_energy * f
+	# The lamp gutters slowly and trembles a little; the flare in the window
+	# sways (Flicker: no strobing, docs/ARCHITECTURE.md, "Вспышки и мерцание").
+	lamp.light_energy = Flicker.light(_lamp_energy, _flicker, _t)
 	if _flare_time > 0.0:
 		_flare_time -= delta
-		window_light.light_energy = (2.2 + sin(_t * 31.0) * 0.6) * clampf(_flare_time / 1.5, 0.0, 1.0)
+		window_light.light_energy = Flicker.light(2.5, 0.3, _t, 2.0) * clampf(_flare_time / 1.5, 0.0, 1.0)
 	else:
 		window_light.light_energy = 0.0
 
@@ -54,12 +55,13 @@ func set_ceiling(height: float) -> void:
 	ceiling.position.y = height + 0.1
 
 
+## The lamp: its energy and how deep it gutters, 0..1 of it (Flicker.light).
 func set_lamp(energy: float, flicker: float) -> void:
 	_lamp_energy = energy
 	_flicker = flicker
 
 
-## A flare outside: its light trembles in the window for a few seconds.
+## A flare outside: its light sways in the window for a few seconds.
 func flare(seconds: float = 6.0) -> void:
 	_flare_time = seconds
 

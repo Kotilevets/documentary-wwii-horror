@@ -64,10 +64,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		if _settings.visible:
 			if not _settings.back():
 				_show_list()
-		else:
+		elif Flicker.allow_swap():  # the pause comes and goes no faster than a flash can bear
 			close()
 	elif can_open():
-		open()
+		if Flicker.allow_swap():
+			open()
 	else:
 		return
 	get_viewport().set_input_as_handled()

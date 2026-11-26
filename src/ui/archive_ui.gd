@@ -39,7 +39,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event.is_action_pressed("ui_cancel") or event.is_action_pressed("archive_journal") \
 			or event.is_action_pressed("interact"):
-		close()
+		if Flicker.allow_swap():  # the paper comes and goes no faster than a flash can bear
+			close()
 		get_viewport().set_input_as_handled()
 
 

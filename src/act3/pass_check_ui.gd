@@ -81,9 +81,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("ui_right") or event.is_action_pressed("move_right"):
 		step(1)
 	elif event.is_action_pressed("interact") or event.is_action_pressed("ui_accept"):
-		choose()
+		if Flicker.allow_swap():  # choosing closes the view (Flicker: no strobing)
+			choose()
 	elif event.is_action_pressed("ui_cancel"):
-		close()
+		if Flicker.allow_swap():
+			close()
 	else:
 		return
 	get_viewport().set_input_as_handled()

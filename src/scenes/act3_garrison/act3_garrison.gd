@@ -54,7 +54,12 @@ func _start_story(full: bool) -> void:
 	pass_data = PassRules.load_data()
 	Stealth.cover = true
 	subtitle.text = ""
-	bundle.interacted.connect(func(_p: Node) -> void: pass_ui.open())
+	# E on the bundle opens the passes - a whole-screen swap, no faster than
+	# Flicker allows one (asked only when they are shut: E on an open view is
+	# no swap and must not use up the next one).
+	bundle.interacted.connect(func(_p: Node) -> void:
+		if not pass_ui.is_open and Flicker.allow_swap():
+			pass_ui.open())
 	pass_ui.pass_chosen.connect(_on_pass_chosen)
 	dugout_zone.player_exited.connect(func() -> void:
 		if stage == Stage.DUGOUT:

@@ -186,6 +186,11 @@ func wait_until(done: Callable, limit: float, what: String) -> bool:
 ## interrogation listen to; Input.action_press makes no event). Whole
 ## process frames: the pass check holds the tree paused.
 func _press_event(action: String) -> void:
+	# A person, not a key masher: a key that swaps the whole screen waits
+	# until Flicker would let it (docs/ARCHITECTURE.md, "Вспышки и мерцание").
+	if action in ["interact", "ui_cancel", "ui_accept", "archive_journal", "inventory"]:
+		while not Flicker.swap_ready():
+			await tree.process_frame
 	for pressed in [true, false]:
 		var ev := InputEventAction.new()
 		ev.action = action

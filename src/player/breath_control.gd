@@ -31,6 +31,12 @@ signal sound_made(kind: String, loudness: float)
 @export var sip_amount: float = 0.35
 
 var air: float = 1.0
+## What the frame shows of the air (g_air): it follows `air` over
+## AIR_SHOWN_TAU s, so that a sip or a breath brightens the frame
+## gradually and pressing the key fast cannot make it flash
+## (docs/ARCHITECTURE.md, "Вспышки и мерцание"). The game goes by `air`.
+const AIR_SHOWN_TAU := 0.3
+var shown_air: float = 1.0
 var holding: bool = false
 var exposure: float = 0.0
 var _lockout: float = 0.0
@@ -108,7 +114,7 @@ func step(delta: float, hold_input: bool, enemy_distance: float) -> void:
 		_catch_armed = true
 		_pant(delta)
 		_update_ragged()
-		_publish()
+		_publish(delta)
 		return
 
 	if want_hold and not holding:
@@ -141,7 +147,7 @@ func step(delta: float, hold_input: bool, enemy_distance: float) -> void:
 	_update_strain(delta, enemy_distance)
 	_pant(delta)
 	_update_ragged()
-	_publish()
+	_publish(delta)
 
 
 ## His ragged breath: STRAIN_BASE once an enemy is within threat_radius,
@@ -289,5 +295,6 @@ func nearest_enemy_distance() -> float:
 	return best
 
 
-func _publish() -> void:
-	RenderingServer.global_shader_parameter_set("g_air", air)
+func _publish(delta: float) -> void:
+	shown_air += (air - shown_air) * (1.0 - exp(-delta / AIR_SHOWN_TAU))
+	RenderingServer.global_shader_parameter_set("g_air", shown_air)

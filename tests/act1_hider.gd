@@ -357,6 +357,11 @@ func play(notice: Pickup, bread: Pickup, spot: HideSpot, at_table: Vector3, rout
 ## A key pressed and let go as an input event (what the document view listens
 ## to: Input.action_press makes no event).
 func _press_event(action: String) -> void:
+	# A person, not a key masher: a key that swaps the whole screen waits
+	# until Flicker would let it (docs/ARCHITECTURE.md, "Вспышки и мерцание").
+	if action in ["interact", "ui_cancel", "ui_accept", "archive_journal", "inventory"]:
+		while not Flicker.swap_ready():
+			await tree.process_frame
 	var ev := InputEventAction.new()
 	ev.action = action
 	ev.pressed = true

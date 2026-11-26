@@ -30,7 +30,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	if _fire != null:
-		_fire.light_energy = 1.6 + 0.35 * sin(_t * 11.0) + 0.2 * sin(_t * 23.0 + 1.3)
+		_fire.light_energy = Flicker.light(1.95, 0.35, _t, 1.0)  # sways, never strobes (Flicker)
 
 
 ## The barrier lifts; the way into the garrison opens.

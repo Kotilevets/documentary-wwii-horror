@@ -33,7 +33,7 @@ func _process(delta: float) -> void:
 		_burn += delta
 		var k := _burn / burn_time
 		star.position = Vector3(sin(_burn) * 1.5, rise_height * sqrt(minf(k * 3.0, 1.0)) - k * 6.0, 0.0)
-		light.light_energy = 6.0 * (1.0 - k) * (0.85 + 0.15 * sin(_burn * 31.0))
+		light.light_energy = Flicker.light(6.0 * (1.0 - k), 0.15, _burn)  # sways, never strobes (Flicker)
 		if k >= 1.0:
 			_burn = -1.0
 			star.visible = false

@@ -96,6 +96,7 @@ func _run() -> void:
 	await _test_menus()
 	await _test_controls()
 	await _test_brightness()
+	await _test_flashes()
 
 
 # --- systems -------------------------------------------------------------------
@@ -7197,11 +7198,13 @@ func _test_menus() -> void:
 	var esc := InputEventAction.new()
 	esc.action = "ui_cancel"
 	esc.pressed = true
+	Flicker.forget_swaps()  # one key at a time, not mashed (Flicker.SWAP_GAP)
 	PauseMenu._unhandled_input(esc)
 	check(PauseMenu.is_open and get_tree().paused and PauseMenu._root.visible, "Esc pauses the level")
 	PauseMenu._show_settings()
 	PauseMenu._unhandled_input(esc)
 	check(PauseMenu.is_open and PauseMenu._list.visible, "Esc in the settings goes back to the pause list")
+	Flicker.forget_swaps()
 	PauseMenu._unhandled_input(esc)
 	check(not PauseMenu.is_open and not get_tree().paused, "Esc again continues")
 	PauseMenu.focus_changed(false)
@@ -8587,3 +8590,358 @@ func _test_breath_cues() -> void:
 	await frames(2)
 	PanicSystem.reset()
 	Sfx.set_muffle(Sfx.OPEN_AIR, 0.0, 0.0)
+
+
+# --- flashes ---------------------------------------------------------------------
+
+## The most swings of `values` by `step` or more inside any `per` values in a
+## row - with `per` the rate, the most in any second. A swing is a change of
+## `step` from the last extreme the other way, as tools/flash_check.py counts
+## a block's transitions (a flash is two).
+func _most_swings(values: PackedFloat32Array, step: float, per: int) -> int:
+	var hits: Array[int] = []
+	var hi := values[0]
+	var lo := values[0]
+	var dir := 0
+	for i in range(1, values.size()):
+		var v := values[i]
+		hi = maxf(hi, v)
+		lo = minf(lo, v)
+		if dir >= 0 and hi - v >= step:
+			hits.append(i)
+			dir = -1
+			hi = v
+			lo = v
+		elif dir <= 0 and v - lo >= step:
+			hits.append(i)
+			dir = 1
+			hi = v
+			lo = v
+	var most := 0
+	var a := 0
+	for b in hits.size():
+		while hits[b] - hits[a] >= per:
+			a += 1
+		most = maxi(most, b - a + 1)
+	return most
+
+
+## Deep swings of a light a second at most: changes by 6 % of its top or
+## more - a tremble within 5 % (Flicker.SHIMMER) never counts.
+func _deep_swings(energy: PackedFloat32Array, fps: int) -> int:
+	var top := 0.0
+	for e in energy:
+		top = maxf(top, e)
+	return _most_swings(energy, 0.06 * top, fps)
+
+
+## The ring of frame_darkening (film_common.gdshaderinc): 1 inside the tunnel
+## radius `r0`, 0 from r0 + 0.38 on (smoothstep with the edges reversed).
+func _tunnel(r: float, r0: float) -> float:
+	var t := clampf((r0 + 0.38 - r) / 0.38, 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
+
+
+## Flashes and flicker (docs/ARCHITECTURE.md, "Вспышки и мерцание"): no light,
+## pulse or key makes more than two flashes a second (four swings of 0.1 in
+## luminance), and flicker that goes on stays under one and a half (three).
+func _test_flashes() -> void:
+	const FPS := 60
+	var dt := 1.0 / FPS
+
+	# Flicker itself: a slow sway 0..1, a tremble of at most 1 peak to peak.
+	var sway := PackedFloat32Array()
+	var lo := 1.0
+	var hi := -1.0
+	var tr_lo := 1.0
+	var tr_hi := -1.0
+	for i in 120 * FPS:
+		var t := i * dt
+		var s := Flicker.sway(t)
+		sway.append(s)
+		lo = minf(lo, s)
+		hi = maxf(hi, s)
+		tr_lo = minf(tr_lo, Flicker.tremble(t, 0.7))
+		tr_hi = maxf(tr_hi, Flicker.tremble(t, 0.7))
+	check(lo >= -0.001 and hi <= 1.001 and hi - lo > 0.9, "Flicker: the sway goes from 0 to 1", [lo, hi])
+	check(_most_swings(sway, 0.05, FPS) <= 3, "the sway turns at most three times a second (one and a half flashes)",
+			_most_swings(sway, 0.05, FPS))
+	check(Flicker.SHIMMER <= 0.05, "a light trembles by 5 % at most", Flicker.SHIMMER)
+	check(tr_hi - tr_lo <= 1.0001 and tr_hi - tr_lo > 0.8, "the tremble is at most 1 peak to peak: SHIMMER of a light",
+			tr_hi - tr_lo)
+
+	# The lamp of the dream, every room: deep only slowly.
+	var layout := (load("res://src/scenes/interlude_night/night_layout.gd") as GDScript).new() as Node3D
+	layout.lamp = OmniLight3D.new()
+	layout.window_light = OmniLight3D.new()
+	var lamp_rooms: Array = (load("res://src/scenes/interlude_night/night_dream.gd") as GDScript) \
+			.get_script_constant_map()["LAMP"]
+	var lamp_worst := 0
+	var lamp_lo := 99.0
+	var lamp_hi := 0.0
+	for room in lamp_rooms:
+		layout.set_lamp(room[0], room[1])
+		var e := PackedFloat32Array()
+		for i in 60 * FPS:
+			layout._process(dt)
+			e.append(layout.lamp.light_energy)
+		lamp_worst = maxi(lamp_worst, _deep_swings(e, FPS))
+		if room == lamp_rooms[3]:
+			for x in e:
+				lamp_lo = minf(lamp_lo, x)
+				lamp_hi = maxf(lamp_hi, x)
+	check(lamp_worst <= 3, "the dream's lamp gutters deeply only slowly: at most three swings a second",
+			lamp_worst)
+	check(lamp_lo < 0.2 and lamp_hi > 0.55, "in the last room it still dies down almost to nothing",
+			[lamp_lo, lamp_hi])
+	# The flare in the window: it sways, then fades.
+	layout.flare(6.0)
+	var win := PackedFloat32Array()
+	for i in 6 * FPS:
+		layout._process(dt)
+		win.append(layout.window_light.light_energy)
+	layout._process(dt)
+	check(_deep_swings(win, FPS) <= 3 and win[0] > 1.5 and layout.window_light.light_energy < 0.001,
+			"the flare in the window sways, not strobes, and goes out", _deep_swings(win, FPS))
+	layout.lamp.free()
+	layout.window_light.free()
+	layout.free()
+
+	# The signal flare over the village (red light).
+	var flare := (load("res://src/props/signal_flare.tscn") as PackedScene).instantiate() as SignalFlare
+	flare.autofire = false
+	add_child(flare)
+	await frames(1)
+	flare.set_process(false)
+	flare.launch()
+	var fl := PackedFloat32Array()
+	for i in int(flare.burn_time * FPS):
+		flare._process(dt)
+		fl.append(flare.light.light_energy)
+	check(_deep_swings(fl, FPS) <= 3 and fl[0] > 4.5, "the signal flare sways as it falls, never strobes",
+			_deep_swings(fl, FPS))
+	flare.queue_free()
+	PanicSystem.reset()
+
+	# The fire in the Act III dugout.
+	var act3 := (load("res://src/scenes/act3_garrison/act3_layout.gd") as GDScript).new() as Node3D
+	act3._fire = OmniLight3D.new()
+	var fire := PackedFloat32Array()
+	for i in 60 * FPS:
+		act3._process(dt)
+		fire.append(act3._fire.light_energy)
+	check(_deep_swings(fire, FPS) <= 3, "the dugout fire flickers deeply only slowly", _deep_swings(fire, FPS))
+	act3._fire.free()
+	act3.free()
+
+	# The heartbeat pulse in the panic tunnel: as deep as ever in the dark, and
+	# no pixel darkens on a beat by more than PULSE_DY (the shader's limit,
+	# modelled here line by line).
+	var film := FileAccess.get_file_as_string("res://src/rendering/shaders/film_common.gdshaderinc")
+	var dy_at := film.find("const float PULSE_DY = ")
+	var pulse_dy := film.substr(dy_at + 23, 12).get_slice(";", 0).to_float() if dy_at >= 0 else 1.0
+	check(pulse_dy > 0.0 and pulse_dy <= 0.08, "a pixel darkens on a heartbeat by 0.08 of luminance at most",
+			pulse_dy)
+	check(film.contains("float beat = smoothstep(radius - g_heartbeat + 0.38, radius - g_heartbeat, r);")
+			and film.contains("float floor_v = pow(max(y_calm - PULSE_DY, 0.0), 1.0 / 2.2) / lit;")
+			and film.contains("float v = max(beat, min(floor_v, calm));")
+			and film.contains("c *= frame_darkening(uv, max(max(c.r, c.g), c.b));"),
+			"the shader holds the beat to PULSE_DY by the brightest channel (the model below is the shader's)")
+	PanicSystem.level = 1.0
+	var full_depth := PanicSystem.pulse_depth()
+	PanicSystem.level = 0.0
+	var calm_depth := PanicSystem.pulse_depth()
+	PanicSystem.reset()
+	check(absf(full_depth - 0.07) < 0.001 and calm_depth < 0.01,
+			"the tunnel closes in on a beat by 0.07 at full panic, as before, and hardly at all when calm",
+			[full_depth, calm_depth])
+	var worst_dy := 0.0
+	var dark_kept := 1.0
+	var bright_cut := 1.0
+	for p in [0.2, 0.5, 0.75, 1.0]:
+		var radius := lerpf(0.62, 0.3, p)
+		var shift: float = 0.05 * (0.25 + 0.75 * p) * (0.4 + p)
+		for li in range(1, 21):
+			var l := li / 20.0
+			for k in 451:
+				var r := k / 500.0
+				var calm := _tunnel(r, radius)
+				var beat := _tunnel(r, radius - shift)
+				var lit := maxf(l, 0.0001)
+				var y_calm := pow(clampf(lit * calm, 0.0, 1.0), 2.2)
+				var floor_v := pow(maxf(y_calm - pulse_dy, 0.0), 1.0 / 2.2) / lit
+				var v := maxf(beat, minf(floor_v, calm))
+				worst_dy = maxf(worst_dy, y_calm - pow(clampf(lit * v, 0.0, 1.0), 2.2))
+				if calm - beat > 0.01:
+					var kept := (calm - v) / (calm - beat)
+					if l <= 0.4:
+						dark_kept = minf(dark_kept, kept)
+					elif p == 1.0 and l == 1.0:
+						bright_cut = minf(bright_cut, kept)
+	check(worst_dy <= pulse_dy + 0.0001, "on any pixel, however bright, the beat darkens by PULSE_DY at most: no flash",
+			worst_dy)
+	check(dark_kept > 0.999, "on a dark pixel (0.4 and below) the pulse keeps its whole depth", dark_kept)
+	check(bright_cut < 0.5, "on a white pixel at full panic it throbs less than half as deep", bright_cut)
+	check(FileAccess.get_file_as_string("res://src/core/panic_system.gd")
+			.contains("global_shader_parameter_set(\"g_heartbeat\", pulse * pulse_depth())"),
+			"the shader is given the pulse by pulse_depth()")
+
+	# The air the frame shows: eased, so a key tapped fast cannot flash it.
+	var w := await _search_world()
+	var player := w.player as Player
+	var breath := player.breath
+	var air_worst := 0
+	for period in [0.24, 0.4, 0.6, 0.9]:
+		breath.air = 1.0
+		breath.shown_air = 1.0
+		PanicSystem.level = 1.0
+		var y := PackedFloat32Array()
+		for i in 6 * FPS:
+			breath.winded = 1.0  # the fastest drain: panicked and out of breath
+			breath.step(dt, fmod(i * dt, period) < period * 0.5, INF)
+			var s := clampf(1.0 - breath.shown_air, 0.0, 1.0)
+			y.append(pow(1.0 - 0.8 * s * s * (3.0 - 2.0 * s), 2.2))
+		air_worst = maxi(air_worst, _most_swings(y, 0.1, FPS))
+	check(air_worst <= 3, "the hold key tapped two to four times a second: the frame changes at most three times a second",
+			air_worst)
+	check(FileAccess.get_file_as_string("res://src/player/breath_control.gd")
+			.contains("global_shader_parameter_set(\"g_air\", shown_air)"), "the frame is given the eased air")
+	breath.air = 0.2
+	for i in FPS:
+		breath._publish(dt)
+	check(absf(breath.shown_air - breath.air) < 0.05, "the frame catches up with the air within a second",
+			[breath.shown_air, breath.air])
+	PanicSystem.reset()
+	breath.winded = 0.0
+
+	# The torch light in the gaps: a beam that keeps grazing an edge.
+	var leak_worst := 0
+	for period in [0.04, 0.1, 0.24, 0.5, 0.9]:
+		for duty in [0.2, 0.5, 0.8]:
+			player.torch_leak = 0.0
+			player._leak_dir = 0
+			player._leak_swing_age = 0.0
+			var y := PackedFloat32Array()
+			for i in 5 * FPS:
+				player._follow_leak(1.0 if fmod(i * dt, period) < period * duty else 0.0, dt)
+				y.append(pow(0.92 * 0.95 * player.torch_leak, 2.2))
+			leak_worst = maxi(leak_worst, _most_swings(y, 0.1, FPS))
+	check(leak_worst <= 3, "a beam flickering on an edge: the gaps change at most three times a second", leak_worst)
+	player.torch_leak = 0.0
+	player._leak_dir = 0
+	player._leak_swing_age = 0.0
+	for i in int(0.3 * FPS):
+		player._follow_leak(1.0, dt)
+	var lit := player.torch_leak
+	for i in int(0.6 * FPS):
+		player._follow_leak(0.0, dt)
+	check(lit > 0.99 and player.torch_leak < 0.01, "but a beam that comes lights the gaps at once and goes out after it",
+			[lit, player.torch_leak])
+	player.torch_leak = 1.0
+	player._opened_k = 1.0
+	var opened := player.shown_leak()
+	player._opened_k = 0.0
+	check(opened == 0.0 and is_equal_approx(player.shown_leak(), player._leak_gain),
+			"the doors swung open: the gaps' light is gone with them", opened)
+	player._opened_k = 1.0
+	player._update_torch_leak(dt)
+	var painted: float = (player.hide_overlay.material as ShaderMaterial).get_shader_parameter("leak")
+	player._opened_k = 0.0
+	check(player.torch_leak > 0.5 and painted == 0.0, "and the overlay is given what is shown, not the raw leak",
+			[player.torch_leak, painted])
+	PanicSystem.reset()
+	player.torch_leak = 0.0
+	var overlay := FileAccess.get_file_as_string("res://src/player/hide_overlay.gdshader")
+	check(overlay.contains("0.04 * hash(seg + floor(TIME * 12.0))") and not overlay.contains("0.15 * hash(floor(along"),
+			"the dust in the gaps trembles by 4 % twelve times a second, not 15 %")
+	check(pow(0.92, 2.2) - pow(0.92 * 0.96, 2.2) < 0.08, "4 % on the brightest gap changes the luminance by under 0.1")
+
+	# Keys that swap the whole screen: mashed, at most one swap per SWAP_GAP.
+	Flicker.forget_swaps()
+	var allowed := 0
+	for i in 10:
+		allowed += int(Flicker.allow_swap())
+	check(allowed == 1 and not Flicker.swap_ready(), "ten presses at once: one swap")
+	await _wait(Flicker.SWAP_GAP + 0.05)
+	check(Flicker.swap_ready() and Flicker.allow_swap(), "after SWAP_GAP a press swaps again")
+	var fake := Node3D.new()
+	fake.add_to_group("levels")
+	add_child(fake)
+	var esc := InputEventAction.new()
+	esc.action = "ui_cancel"
+	esc.pressed = true
+	Flicker.forget_swaps()
+	var swaps := 0
+	var was := PauseMenu.is_open
+	for i in 10:
+		PauseMenu._unhandled_input(esc)
+		swaps += int(PauseMenu.is_open != was)
+		was = PauseMenu.is_open
+	check(swaps == 1 and PauseMenu.is_open and get_tree().paused, "Esc mashed ten times: the pause opens once and stays",
+			swaps)
+	PauseMenu.close()
+	var journal := InputEventAction.new()
+	journal.action = "archive_journal"
+	journal.pressed = true
+	Flicker.forget_swaps()
+	swaps = 0
+	was = player.archive_ui.is_open
+	for i in 10:
+		player._unhandled_input(journal)
+		player.archive_ui._unhandled_input(journal)
+		swaps += int(player.archive_ui.is_open != was)
+		was = player.archive_ui.is_open
+	check(swaps == 1 and player.archive_ui.is_open, "J mashed ten times: the journal opens once and stays", swaps)
+	player.archive_ui.close()
+	# E at the wardrobe, mashed: in once; then the satchel in there, mashed.
+	var wardrobe := w.wardrobe as HideSpot
+	var shape := wardrobe.get_node_or_null("Shape") as Node3D
+	player.global_position = wardrobe.global_position + Vector3(0, 0, -1.1)
+	await frames(2)
+	player.look_towards(shape.global_position if shape != null else wardrobe.global_position + Vector3.UP)
+	await frames(2)
+	var e_key := InputEventAction.new()
+	e_key.action = "interact"
+	e_key.pressed = true
+	Flicker.forget_swaps()
+	swaps = 0
+	was = player.is_hidden
+	for i in 10:
+		player._unhandled_input(e_key)
+		swaps += int(player.is_hidden != was)
+		was = player.is_hidden
+	check(swaps == 1 and player.is_hidden, "E mashed at the wardrobe: in once, and he stays in", swaps)
+	var bag := InputEventAction.new()
+	bag.action = "inventory"
+	bag.pressed = true
+	Flicker.forget_swaps()
+	swaps = 0
+	was = player.satchel.is_open
+	for i in 10:
+		player._unhandled_input(bag)
+		swaps += int(player.satchel.is_open != was)
+		was = player.satchel.is_open
+	check(swaps == 1 and player.satchel.is_open, "in a hiding place the satchel, mashed, opens once", swaps)
+	player.satchel.close()
+	if player.is_hidden:
+		wardrobe.interact(player)
+	# The passes: Esc straight after the E that opened them waits.
+	var passes := PassCheckUI.new()
+	add_child(passes)
+	await frames(1)
+	passes.open()
+	await _passes(2)  # not the frame it opened in
+	Flicker.forget_swaps()
+	Flicker.allow_swap()  # the E on the bundle
+	passes._unhandled_input(esc)
+	var stayed := passes.is_open
+	Flicker.forget_swaps()
+	passes._unhandled_input(esc)
+	check(stayed and not passes.is_open, "the passes: Esc right after the E that opened them waits, later it closes them",
+			[stayed, passes.is_open])
+	passes.queue_free()
+	Flicker.forget_swaps()
+	fake.queue_free()
+	(w.root as Node).queue_free()
+	await frames(2)
+	await _wait(1.5)  # the wardrobe's creak and his panting die away before the runner quits
