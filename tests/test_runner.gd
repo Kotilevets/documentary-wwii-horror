@@ -70,6 +70,7 @@ func _run() -> void:
 	await _test_held_door()
 	await _test_hearing_walls()
 	await _test_capture()
+	await _test_spotted()
 	await _test_winded()
 	await _test_hunger()
 	await _test_wound()
@@ -1497,6 +1498,7 @@ func _test_invasion() -> void:
 	var sounds: Array[String] = []
 	var on_sound := func(id: String, _p: AudioStreamPlayer3D) -> void: sounds.append(id)
 	Sfx.played.connect(on_sound)
+	Sfx._missing.clear()  # _test_sound_bank asked for every id: the knock must ask for its own
 	check(Perception.in_safe_zone(), "prologue in the izba is a sepia safe zone")
 	check(not fg.visible and not soldier.visible, "no occupiers in the prologue")
 	check(not seq.flare.autofire, "no flares before the invasion")
@@ -1530,6 +1532,11 @@ func _test_invasion() -> void:
 			"beats run in order", beats)
 	check(seq.beat == InvasionSequence.Beat.ESCAPE, "the sequence reaches the escape", seq.beat)
 	check(sounds.has("engine_far"), "a truck is heard far off when they come", sounds)
+	check(sounds.has("door_knock") and Sfx.missing_ids().has("de_door") and not Sfx.missing_ids().has("de_shout")
+			and not sounds.has("enemy_break_run")
+			and not sounds.has("breath_startle") and player.startles == 0,
+			"the knock is a demand at the door, not 'I see you': no run, no start (his voice silent until recorded)",
+			[player.startles, Sfx.missing_ids()])
 	Sfx.played.disconnect(on_sound)
 	check(safe_after_invasion, "no sepia after the flare")
 	check(fg.visible and seq.flare.autofire, "patrols and flares start with the invasion")
@@ -2575,6 +2582,297 @@ func _test_capture() -> void:
 	PanicSystem.reset()
 	Perception.reset()
 	Inventory.clear()
+
+
+# --- spotted ----------------------------------------------------------------------
+
+## "Spotted" (docs/ARCHITECTURE.md, "Заметили"): an enemy who raises the
+## alarm breaks into a run (a world sound, never noise for Stealth) and his
+## voice slot stays silent; a moment later the boy starts - a flinch and a
+## gasp only he hears. Nothing of it on suspicion, a direct grab, phantoms,
+## held breath (only the flinch) or from too far; the searchlight always.
+func _test_spotted() -> void:
+	PanicSystem.reset()
+	var heard: Array[Dictionary] = []
+	var on_sound := func(id: String, p: AudioStreamPlayer3D) -> void:
+		heard.append({"id": id, "bus": String(p.bus), "pos": p.global_position, "at": Stealth.clock})
+	var of := func(id: String) -> Array[Dictionary]:
+		var out: Array[Dictionary] = []
+		for e: Dictionary in heard:
+			if e["id"] == id:
+				out.append(e)
+		return out
+	var noise := [0, 0]  # his, anyone else's
+	var on_noise := func(_pos: Vector3, _loud: float, source: Node) -> void:
+		noise[0 if source is Player else 1] += 1
+	Sfx.played.connect(on_sound)
+	Stealth.noise_emitted.connect(on_noise)
+
+	# The voices: silent slots, the policeman's his own.
+	var silent := true
+	for id: String in ["de_speech", "de_shout", "de_door", "polizei_speech", "polizei_shout"]:
+		silent = silent and Sfx.stream_for(id) == null
+	check(silent, "the voices stay silent until recorded: no placeholder, nothing like a voice")
+	check(Sfx.bus_of("enemy_break_run") == Sfx.WORLD_BUS and Sfx.bus_of("breath_startle") == Sfx.BODY_BUS,
+			"the run is a sound of the world (muffled in hiding, behind walls); the gasp is his own body")
+	var bank = JSON.parse_string(FileAccess.get_file_as_string(Sfx.BANK_PATH))
+	var run_reach := float(bank["enemy_break_run"].get("max_distance", 0.0))
+	check(Player.STARTLE_RADIUS <= run_reach, "he starts only at an alarm he could hear",
+			[Player.STARTLE_RADIUS, run_reach])
+	# The placeholders: the run carries through a wall and lasts past a step;
+	# the gasp is short and ends in silence.
+	var lunge := _pcm(Sfx.stream_for("enemy_break_run") as AudioStreamWAV)
+	var startle := _pcm(Sfx.stream_for("breath_startle") as AudioStreamWAV)
+	var low := 0.0
+	var whole := 0.0
+	var y := 0.0
+	var a := 1.0 - exp(-TAU * Sfx.OCCLUDED_HZ / float(Sfx.MIX_RATE))
+	for x: float in lunge:
+		y += (x - y) * a
+		low += y * y
+		whole += x * x
+	var share := func(pcm: PackedFloat32Array, from: float, to: float) -> float:
+		var e_all := 0.0
+		var e_part := 0.0
+		for i in pcm.size():
+			var t := float(i) / Sfx.MIX_RATE
+			e_all += pcm[i] * pcm[i]
+			if t >= from and t < to:
+				e_part += pcm[i] * pcm[i]
+		return e_part / maxf(e_all, 1e-9)
+	var lunge_len := lunge.size() / float(Sfx.MIX_RATE)
+	check(lunge_len >= 0.35 and lunge_len <= 0.5 and whole > 0.0 and low / whole > 0.5,
+			"the break into a run is low enough to come through a wall", [lunge_len, low / maxf(whole, 1e-9)])
+	# 0.2-0.34 s: the shove and the knocks of kit have died away, only the
+	# sole still grinds (4.3 % of the placeholder; a lone thud leaves ~0.1 %).
+	var grind: float = share.call(lunge, 0.2, 0.34)
+	check(grind >= 0.02, "and it is no single step: the sole still grinds after the shove", grind)
+	check(startle.size() > 0 and startle.size() <= int(0.3 * Sfx.MIX_RATE) and absf(startle[startle.size() - 1]) < 0.01,
+			"his start is a short gasp that ends in silence", startle.size())
+
+	# Seen in the open, six metres off.
+	var w := await _search_world()
+	var player := w.player as Player
+	var soldier := w.soldier as Enemy
+	Sfx._missing.clear()
+	heard.clear()
+	var alarm := {"at": -1.0, "pos": Vector3.ZERO}
+	var on_state := func(s: int) -> void:
+		if s == Enemy.State.ALERT and float(alarm["at"]) < 0.0:
+			alarm["at"] = Stealth.clock
+			alarm["pos"] = soldier.global_position
+	soldier.state_changed.connect(on_state)
+	player.global_position = soldier.global_position + Vector3(0, 0, -6)
+	noise[0] = 0
+	noise[1] = 0
+	await _until(func() -> bool: return soldier.state == Enemy.State.ALERT, 6.0)
+	await _until(func() -> bool: return float(alarm["at"]) >= 0.0 and Stealth.clock - float(alarm["at"]) > 0.45, 3.0)
+	var runs: Array[Dictionary] = of.call("enemy_break_run")
+	var starts: Array[Dictionary] = of.call("breath_startle")
+	var run_pos: Vector3 = runs[0]["pos"] if runs.size() == 1 else Vector3.INF
+	var at_pos: Vector3 = alarm["pos"]
+	check(soldier.state == Enemy.State.ALERT and runs.size() == 1 and Sfx.is_world_bus(StringName(runs[0]["bus"]))
+			and Vector2(run_pos.x - at_pos.x, run_pos.z - at_pos.z).length() < 1.0,
+			"he sees the boy: he breaks into a run, heard from where he is", runs)
+	check(Sfx.missing_ids().has("de_shout") and not Sfx.missing_ids().has("polizei_shout"),
+			"and his shout is asked for - silent until recorded", Sfx.missing_ids())
+	var delay: float = float(starts[0]["at"]) - float(alarm["at"]) if starts.size() == 1 else -1.0
+	check(starts.size() == 1 and starts[0]["bus"] == "Master" and delay >= 0.1 and delay <= 0.3
+			and player.startles == 1,
+			"a moment later the boy starts: a gasp only he hears", [starts.size(), delay, player.startles])
+	check(noise[0] == 0 and noise[1] == 0, "his start and their run are no noise for the enemies", noise)
+	soldier.state_changed.disconnect(on_state)
+	(w.root as Node).queue_free()
+	await frames(2)
+
+	# Caught in the same moment he is seen: the grab and its gasp, no start.
+	w = await _search_world()
+	player = w.player as Player
+	soldier = w.soldier as Enemy
+	var seize := func(e: Enemy) -> void: player.seized_by(e)
+	soldier.player_caught.connect(seize)
+	heard.clear()
+	player.global_position = soldier.global_position + Vector3(0, 0, -0.8)
+	soldier.suspicion = 0.999
+	await _until(func() -> bool: return player.seized, 3.0)
+	await _wait(0.5)
+	await _passes()
+	var ids: Array[String] = []
+	for e: Dictionary in heard:
+		ids.append(String(e["id"]))
+	check(player.seized and ids.has("seize_grab") and ids.has("breath_gasp") and not ids.has("breath_startle")
+			and player.startles == 0,
+			"caught as he is seen: a hand at his collar and its gasp, not a start", [ids, player.startles])
+	soldier.player_caught.disconnect(seize)
+	player.release()
+	(w.root as Node).queue_free()
+	await frames(2)
+
+	# A direct grab (a hiding place checked) is no alarm: no run, no start.
+	w = await _search_world()
+	player = w.player as Player
+	soldier = w.soldier as Enemy
+	heard.clear()
+	player.global_position = soldier.global_position + Vector3(0, 0, -1.0)
+	soldier.set_physics_process(false)
+	soldier._catch()
+	await _wait(0.5)
+	await _passes()
+	check(soldier.state == Enemy.State.ALERT and of.call("enemy_break_run").is_empty()
+			and of.call("breath_startle").is_empty() and player.startles == 0,
+			"a direct grab is no alarm: no run, no start", heard.size())
+	(w.root as Node).queue_free()
+	await frames(2)
+
+	# Suspicious - he comes to look: no run, no start.
+	w = await _search_world()
+	player = w.player as Player
+	soldier = w.soldier as Enemy
+	heard.clear()
+	soldier.alert_to(soldier.global_position + Vector3(3, 0, 0), 0.7)
+	await frames(60)
+	check(soldier.state != Enemy.State.ALERT and of.call("enemy_break_run").is_empty()
+			and of.call("breath_startle").is_empty() and player.startles == 0,
+			"he heard something and comes to look: no run, no start", soldier.state)
+
+	# The local policeman: his own silent slots, never German.
+	soldier.kind = Enemy.Kind.POLIZEI
+	soldier._set_state(Enemy.State.PATROL)
+	soldier.suspicion = 0.0
+	Sfx._missing.clear()
+	soldier._speech_timer = 0.0
+	await frames(3)
+	var spoke: bool = Sfx.missing_ids().has("polizei_speech") and not Sfx.missing_ids().has("de_speech")
+	soldier.alert_to(soldier.global_position + Vector3(3, 0, 0), 1.0)
+	await _until(func() -> bool: return soldier.state == Enemy.State.ALERT, 2.0)
+	await frames(2)
+	check(spoke and soldier.state == Enemy.State.ALERT and Sfx.missing_ids().has("polizei_shout")
+			and not Sfx.missing_ids().has("de_shout"),
+			"the local policeman speaks and shouts in his own slots, never German", Sfx.missing_ids())
+	(w.root as Node).queue_free()
+	await frames(2)
+
+	# The dog: it barks, it does not run in boots - and the boy starts.
+	w = await _search_world()
+	player = w.player as Player
+	soldier = w.soldier as Enemy
+	soldier.set_physics_process(false)
+	var dog := (load("res://src/ai/dog.tscn") as PackedScene).instantiate() as Dog
+	dog.hold_position = true
+	(w.root as Node).add_child(dog)
+	dog.global_position = player.global_position + Vector3(8, 0, 0)
+	await frames(3)
+	dog.nav_agent = null
+	heard.clear()
+	dog.alert_to(player.global_position, 1.0)
+	await _until(func() -> bool: return dog.state == Enemy.State.ALERT, 2.0)
+	await _until(func() -> bool: return player.startles > 0, 1.0)
+	await _passes()
+	check(dog.state == Enemy.State.ALERT and of.call("enemy_break_run").is_empty() and player.startles == 1
+			and of.call("breath_startle").size() == 1,
+			"the dog finds him: a bark, no boots breaking into a run, and he starts", [dog.state, heard.size()])
+
+	# His start, called directly: held breath, a second alarm, too far, the beam.
+	dog.set_physics_process(false)
+	var breath := player.breath
+	var near := player.global_position + Vector3(5, 0, 0)
+	Stealth.clock += Player.STARTLE_REARM + 0.1
+	heard.clear()
+	breath.holding = true
+	breath.air = 0.6
+	PanicSystem.level = 0.5
+	player.startle(near)
+	await _until(func() -> bool: return player.startles == 2, 1.0)
+	await _passes()
+	check(player.startles == 2 and of.call("breath_startle").is_empty() and breath.holding
+			and is_equal_approx(breath.air, 0.6) and PanicSystem.level <= 0.5 + 0.001,
+			"holding his breath he only flinches: the breath stays held, no panic on top",
+			[player.startles, breath.air, PanicSystem.level])
+	breath.holding = false
+	player.startle(near)
+	await _wait(0.4)
+	check(player.startles == 2, "not twice in a row: one start for one alarm", player.startles)
+	Stealth.clock += Player.STARTLE_REARM + 0.1
+	player.startle(player.global_position + Vector3(Player.STARTLE_RADIUS + 2.0, 0, 0))
+	await _wait(0.4)
+	check(player.startles == 2, "an alarm beyond his hearing: no start", player.startles)
+	player.startle(player.global_position + Vector3(Player.STARTLE_RADIUS - 2.0, 0, 0))
+	await _wait(0.4)
+	check(player.startles == 3 and of.call("breath_startle").size() == 1, "within it: a start and a gasp",
+			player.startles)
+	Stealth.clock += Player.STARTLE_REARM + 0.1
+	breath.cues = false
+	heard.clear()
+	player.startle(near)
+	await _wait(0.4)
+	breath.cues = true
+	check(player.startles == 4 and of.call("breath_startle").is_empty(),
+			"with his breath not heard (tests) the start is a flinch only", player.startles)
+	Stealth.clock += Player.STARTLE_REARM + 0.1
+	player.startle(player.global_position + Vector3(38, 6, 0), true)
+	await _wait(0.4)
+	check(player.startles == 5, "in a searchlight's beam he starts however far the lamp", player.startles)
+
+	# Phantoms never sound like being seen.
+	heard.clear()
+	var phantom_ids: Array[String] = []
+	var on_phantom := func(id: String, _pos: Vector3) -> void: phantom_ids.append(id)
+	var phantoms := player.get_node("PhantomSounds") as PhantomSounds
+	phantoms.phantom_played.connect(on_phantom)
+	PanicSystem.level = 0.95
+	for i in 60:
+		phantoms.play_one(player)
+	await _wait(0.3)
+	phantoms.phantom_played.disconnect(on_phantom)
+	var only := not phantom_ids.is_empty()
+	for id: String in phantom_ids:
+		only = only and (id == "step_player" or id == "dog_bark")
+	check(only and of.call("enemy_break_run").is_empty() and of.call("breath_startle").is_empty()
+			and player.startles == 5,
+			"panic's phantoms are steps and barks, never an alarm", phantom_ids.size())
+	PanicSystem.reset()
+	(w.root as Node).queue_free()
+	await frames(2)
+
+	# The searchlight: the boy in the beam starts though the lamp is over 30 m
+	# off, once; the patrol it calls breaks into a run; alarm_raised once.
+	TraumaEcho.forget_all()
+	var scene := ECHO_SCENE.instantiate()
+	add_child(scene)
+	await frames(3)
+	player = scene.get_node("Player") as Player
+	var patrol := scene.get_node("Patrol") as Enemy
+	var tower := scene.get_node("Tower") as SearchlightTower
+	for n: Node in [player, tower, scene.get_node("TraumaEcho"), player.get_node("BreathControl")]:
+		n.set_physics_process(false)
+	var raised := [0]
+	var on_raised := func(_pos: Vector3) -> void: raised[0] += 1
+	tower.alarm_raised.connect(on_raised)
+	heard.clear()
+	var from_lamp := player.global_position.distance_to(tower.lamp.global_position)
+	tower.raise_alarm(player.global_position)
+	await _until(func() -> bool: return patrol.state == Enemy.State.ALERT, 2.0)
+	await _wait(0.4)
+	await _passes()
+	check(from_lamp > Player.STARTLE_RADIUS and player.startles == 1 and of.call("breath_startle").size() == 1
+			and of.call("enemy_break_run").size() == 1 and raised[0] == 1,
+			"the searchlight: he starts once in the beam, the patrol it calls breaks into a run",
+			[from_lamp, player.startles, of.call("enemy_break_run").size(), raised[0]])
+	# The beam alone, no one near enough to be heard: he still starts.
+	patrol.set_physics_process(false)
+	Stealth.clock += Player.STARTLE_REARM + 0.1
+	tower.raise_alarm(player.global_position)
+	await _wait(0.4)
+	check(player.startles == 2 and of.call("breath_startle").size() == 2 and raised[0] == 2,
+			"caught in the beam with no one near, he starts all the same", [player.startles, raised[0]])
+	tower.alarm_raised.disconnect(on_raised)
+	scene.queue_free()
+	await frames(2)
+
+	Sfx.played.disconnect(on_sound)
+	Stealth.noise_emitted.disconnect(on_noise)
+	PanicSystem.reset()
+	await _wait(1.0)  # let the last sounds end before the next test
 
 
 # --- out of breath ---------------------------------------------------------------

@@ -4,7 +4,9 @@ extends Node
 ## perception): above `threshold` the boy starts to hear things that are not
 ## there - a step right behind him, a dog barking somewhere back down the
 ## road. Only he hears them: they never go to Stealth, enemies do not react.
-## The higher the panic, the more often.
+## The higher the panic, the more often. Never an alarm's sounds (an enemy
+## breaking into a run, his own start): fear lies with steps and barks, not
+## about being seen (docs/ARCHITECTURE.md, "Заметили").
 
 signal phantom_played(id: String, position: Vector3)
 

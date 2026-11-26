@@ -195,7 +195,9 @@ func _invade() -> void:
 
 func _knock() -> void:
 	Sfx.play_at("door_knock", door.sound_point())
-	Sfx.play_at("de_shout", soldier.global_position + Vector3.UP * 1.6)
+	# A demand at the door, not "I see you": he has not been seen, so no
+	# alarm to start at either (docs/ARCHITECTURE.md, "Заметили").
+	Sfx.play_at("de_door", soldier.global_position + Vector3.UP * 1.6)
 	PanicSystem.spike(0.25)
 	_set_beat(Beat.KNOCK, warning_time)
 

@@ -2,8 +2,8 @@ extends Node
 ## Sound bank: id -> recordings from assets/data/sound_bank.json.
 ## While a recording is not in the project, a synthesized placeholder is used
 ## (bark, step, breath, knock, clock, typewriter, kettle, engine...); ids
-## without a placeholder (German speech) stay silent and are listed by
-## missing_ids(). Placeholders are synthesized by synth() and baked into
+## without a placeholder (voices: German speech, the local policeman's) stay
+## silent and are listed by missing_ids(). Placeholders are synthesized by synth() and baked into
 ## assets/audio/placeholder/<kind>.res (tools/bake_sounds.gd), so the game
 ## only loads them; a kind with no baked file is synthesized on first use.
 ## "loop": true in the bank - the sound repeats until its player is freed
@@ -819,6 +819,66 @@ static func synth(kind: String) -> AudioStreamWAV:
 				lp2 = lerpf(lp2, lp, 0.3)
 				var env := sin(PI * minf(t / 0.6, 0.5)) if t < 0.3 else maxf(1.0 - (t - 0.3) / 0.2, 0.0)
 				samples.append(lp2 * env * 1.6)
+		"lunge":
+			# A man breaking into a run (docs/ARCHITECTURE.md, "Заметили"): the
+			# shove off the ground, the sole grinding as it pushes, the dull
+			# knock of clothes and kit against the body - no named object, no
+			# weapon. No step of the run itself: Gait makes those. Mostly below
+			# 700 Hz: it comes whole through a wall or the cellar boards, duller.
+			var g1 := 0.0
+			var g2 := 0.0
+			for i in int(0.42 * MIX_RATE):
+				var t := float(i) / MIX_RATE
+				g1 = lerpf(g1, rng.randf_range(-1, 1), 0.12)
+				g2 = lerpf(g2, g1, 0.12)
+				var x := sin(TAU * (105.0 - 55.0 * t) * t) * exp(-t * 22.0) * 0.8
+				x += sin(TAU * 210.0 * t) * exp(-t * 36.0) * 0.25  # the shove on laptop speakers
+				var s := t - 0.02
+				if s >= 0.0:
+					var tail := 1.0 if t < 0.34 else maxf(1.0 - (t - 0.34) / 0.06, 0.0)
+					x += g2 * 4.0 * minf(s / 0.015, 1.0) * exp(-s * 6.0) * (0.7 + 0.3 * sin(TAU * 23.0 * s)) * tail
+				for tk: float in [0.07, 0.15]:
+					var u := t - tk
+					if u >= 0.0:
+						x += (0.6 * sin(TAU * 380.0 * u) + 0.4 * sin(TAU * 610.0 * u)) * exp(-u * 45.0) * 0.3
+						x += (g1 - g2) * exp(-u * 70.0) * 0.2
+				samples.append(x * 0.8 if t < 0.4 else 0.0)
+		"startle":
+			# A start: a short sharp gasp in through an open mouth, quickening
+			# and brightening (two resonances rising), no voice. Not "catch"
+			# (no knock where it stops), not "gasp" (no long fall), not "hiss"
+			# (not through the teeth), not "sip" (not the nose).
+			var raw := PackedFloat32Array()
+			var y1 := 0.0
+			var y2 := 0.0
+			var z1 := 0.0
+			var z2 := 0.0
+			var lp := 0.0
+			var r := 0.96
+			var top := 0.0
+			for i in int(0.26 * MIX_RATE):
+				var t := float(i) / MIX_RATE
+				var n := rng.randf_range(-1, 1)
+				var k := minf(t / 0.2, 1.0)
+				var w1 := TAU * lerpf(900.0, 1300.0, k) / MIX_RATE
+				var w2 := TAU * lerpf(2300.0, 2700.0, k) / MIX_RATE
+				var y := (1.0 - r) * n + 2.0 * r * cos(w1) * y1 - r * r * y2
+				y2 = y1
+				y1 = y
+				var z := (1.0 - r) * n + 2.0 * r * cos(w2) * z1 - r * r * z2
+				z2 = z1
+				z1 = z
+				lp = lerpf(lp, n, 0.3)
+				var env := 0.0
+				if t < 0.2:
+					env = minf(t / 0.006, 1.0) * (1.0 - 0.4 * t / 0.2)
+				elif t < 0.215:
+					env = 0.6 * (1.0 - (t - 0.2) / 0.015)
+				var x := (y + 0.6 * z + 0.3 * lp) * env
+				raw.append(x)
+				top = maxf(top, absf(x))
+			for x in raw:
+				samples.append(x / maxf(top, 1e-6) * 0.7)
 		"breath", "sob", "gasp":
 			var dur := {"breath": 0.6, "sob": 0.45, "gasp": 0.5}[kind] as float
 			var prev := 0.0

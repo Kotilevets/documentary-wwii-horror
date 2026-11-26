@@ -166,6 +166,11 @@ func raise_alarm(pos: Vector3) -> void:
 	_lock = lock_time
 	PanicSystem.spike(0.35)
 	Sfx.play_at("de_shout", global_position + Vector3.UP * (height + 1.6))  # the guard on the deck
+	# He is in the beam: he knows he has been seen, however far the lamp
+	# (docs/ARCHITECTURE.md, "Заметили").
+	var boy := Stealth.player as Player
+	if boy != null:
+		boy.startle(lamp.global_position, true)
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if (e as Node3D).global_position.distance_to(pos) < alarm_radius:
 			(e as Enemy).alert_to(pos, 1.0)

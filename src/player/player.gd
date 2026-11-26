@@ -179,6 +179,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
+	_update_startle()
 	_update_rummage()
 	camera.v_offset = _flinch_dip + breath_sway + (hunger.tremor_offset() if hunger != null else 0.0)
 	if seized:
@@ -625,6 +626,46 @@ func flinch(strength: float) -> void:
 	_flinch_tween = create_tween()
 	_flinch_tween.tween_property(self, "_flinch_dip", dip, 0.06)
 	_flinch_tween.tween_property(self, "_flinch_dip", 0.0, 0.4).set_trans(Tween.TRANS_SINE)
+
+
+## "Spotted" (docs/ARCHITECTURE.md, "Заметили"): a moment after an alarm
+## (the reaction follows the sound) the boy starts - a flinch and a short
+## sharp gasp in through the mouth that only he hears. Not more often than
+## STARTLE_REARM s (Stealth.clock); from an enemy farther than STARTLE_RADIUS
+## m (less than the reach of enemy_break_run) there is none.
+const STARTLE_DELAY := 0.15
+const STARTLE_REARM := 3.0
+const STARTLE_RADIUS := 20.0
+const STARTLE_FLINCH := 0.8
+## Starts so far (tests).
+var startles := 0
+var _startle_at := -INF
+var _startle_due := -1.0
+
+
+## An alarm he takes as "they have seen me": an enemy's (Enemy._update_state;
+## the dog's too) or the searchlight's (`always`: he is in its beam). No
+## noise for the enemies, no panic on top of the alarm's own; his breath,
+## held or not, is not touched - held, only the flinch.
+func startle(from: Vector3, always := false) -> void:
+	if seized or Stealth.clock - _startle_at < STARTLE_REARM:
+		return
+	if not always and global_position.distance_to(from) > STARTLE_RADIUS:
+		return
+	_startle_at = Stealth.clock
+	_startle_due = Stealth.clock + STARTLE_DELAY
+
+
+func _update_startle() -> void:
+	if _startle_due < 0.0 or Stealth.clock < _startle_due:
+		return
+	_startle_due = -1.0
+	if seized:
+		return  # caught meanwhile: the grab and its gasp, not this
+	startles += 1
+	flinch(STARTLE_FLINCH)
+	if breath == null or (breath.cues and not breath.holding):
+		Sfx.play_at("breath_startle", camera.global_position, 1.0, self)
 
 
 ## Panic added when a kicked-in door leaf strikes him.

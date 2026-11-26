@@ -227,18 +227,29 @@ func has_script_route() -> bool:
 	return not _script_route.is_empty()
 
 
-## Untranslated German speech while patrolling (silent until recorded).
+## Untranslated speech while patrolling (silent until recorded).
 func _speak(delta: float) -> void:
 	_speech_timer -= delta
 	if _speech_timer <= 0.0:
 		_speech_timer = randf_range(12.0, 25.0)
 		if state == State.PATROL:
-			Sfx.play_at("de_speech", global_position + Vector3.UP * 1.6)
+			Sfx.play_at(_voice("speech"), global_position + Vector3.UP * 1.6)
 
 
-## Called once when the enemy becomes alerted.
+## This enemy's voice slot: German for the occupiers, his own for the local
+## policeman (his language is the author's call). All silent until
+## recorded (docs/ARCHITECTURE.md, "Голоса: что записать").
+func _voice(what: String) -> String:
+	return ("polizei_" if kind == Kind.POLIZEI else "de_") + what
+
+
+## Called once when the enemy becomes alerted: he shouts (a silent slot
+## until recorded) and breaks into a run - the alarm heard without words
+## (docs/ARCHITECTURE.md, "Заметили"). Only Sfx, never Stealth: no one
+## comes running to the sound of it. The dog barks instead (Dog).
 func _on_alerted() -> void:
-	Sfx.play_at("de_shout", global_position + Vector3.UP * 1.6)
+	Sfx.play_at(_voice("shout"), global_position + Vector3.UP * 1.6)
+	Sfx.play_at("enemy_break_run", global_position + Vector3.UP * 0.5)
 
 
 ## Act III "prozrenie": the monstrous shell falls away from this person.
@@ -307,6 +318,11 @@ func _update_state(p: Player, sees: bool, delta: float) -> void:
 		_set_state(State.ALERT)
 		PanicSystem.spike(0.3)
 		_on_alerted()
+		# He takes it as "they have seen me" (docs/ARCHITECTURE.md, "Заметили").
+		# Here, not in _on_alerted (the dog has its own) nor in _set_state
+		# (_catch goes through it: a grab is no alarm to start at).
+		if p != null:
+			p.startle(global_position + Vector3.UP * 1.1)
 	elif suspicion >= SUSPICIOUS_AT and state == State.PATROL:
 		_set_state(State.SUSPICIOUS)
 
