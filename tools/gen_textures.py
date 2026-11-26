@@ -304,7 +304,7 @@ normal_texture = ExtResource("2_normal")
 uv1_scale = Vector3({rep:g}, {rep:g}, {rep:g})
 uv1_triplanar = true
 uv1_world_triplanar = {"true" if world else "false"}
-""", encoding="utf-8")
+""", encoding="utf-8", newline="\n")
     print(f"{len(MATERIALS)} materials")
 
 
@@ -332,7 +332,7 @@ compress/high_quality=false
 compress/normal_map={normal}
 mipmaps/generate=true
 detect_3d/compress_to=0
-""", encoding="utf-8")
+""", encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

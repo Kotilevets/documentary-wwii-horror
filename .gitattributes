@@ -1,0 +1,21 @@
+# Line endings: LF in the repository and in every checkout, on any system (as in
+# Godot's own project template). Without it the material generator on Windows
+# rewrote every .tres in CRLF, and a multi-line string in a CRLF script carried
+# a CR into the text on screen. Binary files are never touched.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.res binary
+*.scn binary
+*.wav binary
+*.ogg binary
+*.mp3 binary
+*.ttf binary
+*.otf binary
+*.pck binary
+*.exe binary
+*.zip binary
+*.gz binary
