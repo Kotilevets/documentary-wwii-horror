@@ -99,6 +99,8 @@ var _memories: Array[bool] = []
 ## Act I's escape for the map: its bot and its walks.
 var _escape_bot: Escaper = null
 var _escape_traces: Array = []
+## A second try from the flare, as it began: {"again", "sepia", "black", "flare_at"}.
+var _again_start: Dictionary = {}
 
 
 func _ready() -> void:
@@ -176,6 +178,7 @@ func _run() -> void:
 		await _dog_ears()
 	if _part("cellar"):
 		await _hiding("the cellar", "CellarHatch", TO_HATCH)
+		await _hiding_again("the cellar", "CellarHatch", TO_HATCH)
 	if _part("stove"):
 		await _hiding("behind the stove", "StoveNook", TO_NOOK)
 	if _part("escape"):
@@ -239,6 +242,7 @@ func _done_with(lv: Node3D) -> void:
 	await frames(3)
 	LevelBase._checkpoint = {}
 	LevelBase._resume_after_intro = false
+	LevelBase._retry_opening = false
 	Inventory.clear()
 	TraumaEcho.forget_all()  # the next part's echoes do not depend on the order
 
@@ -664,6 +668,40 @@ func _hiding(where: String, spot_name: String, route: Array[Vector3]) -> void:
 				[off.failed, off.worst, off.sounds])
 
 
+## Caught in the opening, he starts it again from the flare (docs/
+## ARCHITECTURE.md, "Прятки в подполе и за печью", «Повтор с ракеты»): no
+## sepia, no prologue. The careful hider takes the notice and the bread while
+## the squad comes up the road, hides before the door is kicked in and sits
+## it all out again, to the escape.
+func _hiding_again(where: String, spot_name: String, route: Array[Vector3]) -> void:
+	_again_start = {}
+	var h := await _hide(Hider.Breath.CAREFUL, spot_name, route, false, true)
+	var hid: String = InvasionSequence.Beat.keys()[h.hid_at] if h.hid_at >= 0 else "-"
+	print("--- %s, again from the flare: %s; start %s; hid in %s, held %.1f s, sips %d, peak %s" % [
+			where, h.failed, _again_start, hid, h.held, h.sounds.count("sip"), h.peak])
+	for e in h.events:
+		print("    ", e)
+	check(bool(_again_start.get("again", false)) and not bool(_again_start.get("sepia", true))
+			and float(_again_start.get("black", 0.0)) > 0.9,
+			"%s, again: no prologue in sepia, the picture comes up out of black" % where, _again_start)
+	check(float(_again_start.get("flare_at", INF)) < 3.0,
+			"%s, again: the flare within 3 s, not after a prologue" % where, _again_start)
+	var order: Array[int] = [InvasionSequence.Beat.PROLOGUE, InvasionSequence.Beat.INVASION,
+			InvasionSequence.Beat.KNOCK, InvasionSequence.Beat.SEARCH, InvasionSequence.Beat.LEAVE,
+			InvasionSequence.Beat.LINGER, InvasionSequence.Beat.RETURN, InvasionSequence.Beat.ESCAPE]
+	check(h.beats == order, "%s, again: the beats in order to the escape" % where, h.beats)
+	check(h.read.has(h.notice_doc) and h.bag.has("bread") and h.took.size() == 2,
+			"%s, again: the notice read and the bread taken before he hid" % where, [h.read, h.bag, h.took])
+	check(h.hid_at >= 0 and h.hid_at < InvasionSequence.Beat.SEARCH,
+			"%s, again: hid before the door was kicked in" % where, hid)
+	var loud := h.sounds.filter(func(k: String) -> bool: return k != "sip")
+	var turned := h.worst.keys().filter(func(k: String) -> bool: return int(h.worst[k]) != Enemy.State.PATROL)
+	var calm := h.peak.values().all(func(v: float) -> bool: return v < Enemy.SUSPICIOUS_AT)
+	check(h.failed == "" and loud.is_empty() and turned.is_empty() and calm and h.still_hidden,
+			"%s, again: not found, nobody turned, only sips; sat it out to the escape" % where,
+			[h.failed, h.sounds, h.worst, h.peak, h.still_hidden])
+
+
 ## Caught, and `sound` gave him away. Under the floor he can only be grabbed
 ## on the sound itself (Enemy._on_noise; the dog cannot smell him through
 ## the hatch). Elsewhere he may be found slowly - heard, then smelled out by
@@ -677,7 +715,8 @@ func _given_away(h: Hider, sound: String) -> bool:
 
 ## Act I from the start (the prologue on), played by a hider breathing `mode`
 ## who hides in IzbaA/<spot_name>, crouching along `route`.
-func _hide(mode: int, spot_name: String, route: Array[Vector3], stop_when_turned := false) -> Hider:
+func _hide(mode: int, spot_name: String, route: Array[Vector3], stop_when_turned := false,
+		again := false) -> Hider:
 	PanicSystem.reset()
 	Perception.reset()
 	Stealth.clear_scent()
@@ -685,12 +724,21 @@ func _hide(mode: int, spot_name: String, route: Array[Vector3], stop_when_turned
 	Inventory.clear()
 	LevelBase._checkpoint = {}
 	LevelBase._resume_after_intro = false
+	# `again`: as after a capture in the opening (LevelBase._on_caught).
+	LevelBase._retry_opening = again
 	var lv := (load(ACT1_PATH) as PackedScene).instantiate()
 	lv.next_level = ""
 	add_child(lv)
 	await frames(2)
 	var h := Hider.new()
 	h.setup(lv, mode)
+	if again:
+		var seq := lv.get_node("Invasion") as InvasionSequence
+		_again_start = {"again": lv.again, "sepia": Perception.in_safe_zone() or seq.prologue_zone.active,
+				"black": (lv.get_node("Overlay/Fade") as ColorRect).modulate.a}
+		seq.beat_changed.connect(func(b: InvasionSequence.Beat) -> void:
+			if b == InvasionSequence.Beat.INVASION and not _again_start.has("flare_at"):
+				_again_start["flare_at"] = h.clock)
 	h.stop_when_turned = stop_when_turned
 	var izba := lv.get_node("IzbaA")
 	h.notice_doc = (izba.get_node("RegistrationNotice") as Pickup).item.document_id

@@ -30,6 +30,10 @@ signal slice_finished
 @export_file("*.tscn") var next_level: String = ""
 ## Checkpoint across a reload after capture (see _resume_checkpoint()).
 static var _resume_after_intro := false
+## A reload after a capture in the opening, not at a checkpoint, starts the
+## opening again from its turn rather than from its quiet beginning (see
+## _retries_opening(); Act I: from the flare).
+static var _retry_opening := false
 ## Checkpoints on the way: names of Spawns markers in the order the boy
 ## reaches them. Coming within checkpoint_radius of the next one while
 ## nobody is after him saves it; capture or a mine then brings him back
@@ -63,6 +67,8 @@ var checkpoint_index := -1
 var _taken: Array[String] = []
 ## This load is a reload after capture past the checkpoint.
 var resumed := false
+## This load is a reload after capture in the opening (_retry_opening).
+var again := false
 ## The forest is not a finish line: the slice ends only after this many
 ## seconds in the forest with no enemy alerted or suspicious.
 @export var forest_calm_needed: float = 4.0
@@ -113,6 +119,8 @@ func _ready() -> void:
 	var resume := _resume_after_intro
 	_resume_after_intro = false
 	resumed = resume
+	again = _retry_opening and not resume
+	_retry_opening = false
 	_start_story(play_intro and not resume and not OS.get_cmdline_user_args().has("--skip-intro"))
 	if resume and _checkpoint.get("scene", "") == scene_file_path:
 		_restore_checkpoint()
@@ -135,6 +143,12 @@ func _start_story(_full: bool) -> void:
 
 ## True if a reload after capture should skip the opening.
 func _resume_checkpoint() -> bool:
+	return false
+
+
+## True if a reload after capture, not at a checkpoint, should start the
+## opening again from its turn. Overridden by story levels.
+func _retries_opening() -> bool:
 	return false
 
 
@@ -196,6 +210,11 @@ func _restore_checkpoint() -> void:
 	if player.wound != null:
 		player.wound.set_bleeding(bool(_checkpoint.get("bleeding", false)),
 				float(_checkpoint.get("bled_for", 0.0)))
+	fade_from_black()
+
+
+## The picture comes up out of black (a checkpoint, a second try).
+func fade_from_black() -> void:
 	fade.modulate.a = 1.0
 	create_tween().tween_property(fade, "modulate:a", 0.0, 1.5)
 
@@ -303,6 +322,7 @@ func _on_caught(enemy: Enemy) -> void:
 		return
 	_ending = true
 	_resume_after_intro = _restarts_at_checkpoint()
+	_retry_opening = not _resume_after_intro and _retries_opening()
 	player.seized_by(enemy)
 	var t := create_tween()
 	t.tween_interval(SEIZE_HOLD)
@@ -324,6 +344,7 @@ func _on_mine(_mine: TripwireMine) -> void:
 		return
 	_ending = true
 	_resume_after_intro = _restarts_at_checkpoint()
+	_retry_opening = not _resume_after_intro and _retries_opening()
 	fade.modulate.a = 1.0
 	Sfx.play_at("ear_ring", player.camera.global_position)
 	var t := create_tween()

@@ -73,6 +73,7 @@ func _run() -> void:
 	await _group(_test_invasion_return)
 	await _group(_test_invasion_out_too_early)
 	await _group(_test_invasion_found)
+	await _group(_test_invasion_again)
 	await _group(_test_invasion_behind_door)
 	await _group(_test_invasion_dog_at_door)
 	await _group(_test_torch_leak)
@@ -135,6 +136,9 @@ func _group(test: Callable) -> void:
 	if not _only.is_empty() and not _only.has(g):
 		return
 	_ran.append(g)
+	# A capture in an earlier group's Act I opening would start the next one
+	# from the flare.
+	LevelBase._retry_opening = false
 	_guard.begin(g)
 	await test.call()
 	_guard.end(g)
@@ -1853,6 +1857,83 @@ func _out_while_lingering(at: Vector3, back_after := -1.0) -> Dictionary:
 
 
 ## The same opening, but the player stays standing in the izba: found.
+## Caught in the opening, he starts it again from the flare, not the
+## prologue; caught in the escape, at the table; the pause starts the act
+## over (docs/ARCHITECTURE.md, "Сцена «Вторжение»", 8).
+func _test_invasion_again() -> void:
+	PanicSystem.reset()
+	Perception.reset()
+	LevelBase._checkpoint = {}
+	LevelBase._resume_after_intro = false
+	LevelBase._retry_opening = false
+	var picked := {}
+	for b in [InvasionSequence.Beat.ESCAPE, InvasionSequence.Beat.INVASION, InvasionSequence.Beat.KNOCK,
+			InvasionSequence.Beat.SEARCH, InvasionSequence.Beat.LINGER, InvasionSequence.Beat.RETURN]:
+		var caught := LEVEL.instantiate()
+		add_child(caught)
+		caught.get_node("Player").get_node("BreathControl").set_physics_process(false)
+		await frames(2)
+		if picked.is_empty():
+			check(not caught.again and (caught.get_node("Invasion") as InvasionSequence).beat == InvasionSequence.Beat.PROLOGUE
+					and Perception.in_safe_zone(), "the first time the opening starts with the prologue, in sepia")
+		(caught.get_node("Invasion") as InvasionSequence).beat = b
+		caught._on_caught(caught.get_node("SoldierRoad") as Enemy)
+		picked[InvasionSequence.Beat.keys()[b]] = [LevelBase._retry_opening, LevelBase._resume_after_intro]
+		# Its reload is not run: the tween is the level's and dies with it.
+		caught.queue_free()
+		await frames(2)
+		Perception.reset()
+	check(picked["ESCAPE"] == [false, true], "caught in the escape: at the table, the opening skipped", picked)
+	var opening := picked.keys().filter(func(k: String) -> bool: return k != "ESCAPE")
+	check(opening.all(func(k: String) -> bool: return picked[k] == [true, false]),
+			"caught in the opening, from the flare to the look back in: again from the flare", picked)
+	# The last capture (in the look back in) left the flag up: this load starts again.
+	var level := LEVEL.instantiate()
+	var seq := level.get_node("Invasion") as InvasionSequence
+	var beats: Array = []
+	seq.beat_changed.connect(func(b: InvasionSequence.Beat) -> void: beats.append(b))
+	add_child(level)
+	level.get_node("Player").get_node("BreathControl").set_physics_process(false)
+	var soldier := level.get_node("SoldierRoad") as Enemy
+	var fade := level.get_node("Overlay/Fade") as ColorRect
+	await frames(2)
+	check(level.again and not LevelBase._retry_opening and not level.resumed, "the flag is spent on this load",
+			[level.again, LevelBase._retry_opening])
+	check(seq.beat == InvasionSequence.Beat.PROLOGUE and seq._timer <= seq.again_time and seq._timer > seq.again_time - 0.5
+			and not seq.prologue_zone.active and not Perception.in_safe_zone(),
+			"a second try: no sepia, the flare %.0f s away, not the whole prologue" % seq.again_time, [seq._timer, seq.prologue_zone.active])
+	check(fade.modulate.a > 0.9, "the picture comes up out of black", fade.modulate.a)
+	check(not soldier.visible and not seq.flare.autofire and not seq.door.is_open,
+			"before the flare: nobody yet, the door shut")
+	await _until(func() -> bool: return seq.beat != InvasionSequence.Beat.PROLOGUE, seq.again_time + 2.0)
+	check(beats == [InvasionSequence.Beat.PROLOGUE, InvasionSequence.Beat.INVASION] and soldier.visible
+			and seq.flare.autofire, "then the flare and the squad, as the first time", beats)
+	await _until(func() -> bool: return fade.modulate.a < 0.01, 1.0)
+	check(fade.modulate.a < 0.01, "by the flare the black has lifted", fade.modulate.a)
+	level.queue_free()
+	await frames(2)
+	# A door opened before the flare begins the invasion at once, as in the prologue.
+	LevelBase._retry_opening = true
+	var opened := LEVEL.instantiate()
+	add_child(opened)
+	opened.get_node("Player").get_node("BreathControl").set_physics_process(false)
+	await frames(2)
+	var seq2 := opened.get_node("Invasion") as InvasionSequence
+	seq2.door.open()
+	await frames(2)
+	check(opened.again and seq2.beat == InvasionSequence.Beat.INVASION and seq2._timer >= 0.0,
+			"the door opened before the flare: the invasion begins with it", seq2.beat)
+	opened.queue_free()
+	await frames(2)
+	# The pause's "Начать акт заново" and "Главное меню" start the act over.
+	LevelBase._retry_opening = true
+	PauseMenu._leave()
+	check(not LevelBase._retry_opening and not LevelBase._resume_after_intro,
+			"leaving by the pause: the act starts over, with the prologue")
+	Perception.reset()
+	PanicSystem.reset()
+
+
 func _test_invasion_found() -> void:
 	PanicSystem.reset()
 	Perception.reset()

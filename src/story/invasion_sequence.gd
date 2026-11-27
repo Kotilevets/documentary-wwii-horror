@@ -22,6 +22,9 @@ enum Beat { PROLOGUE, INVASION, KNOCK, SEARCH, LEAVE, LINGER, RETURN, ESCAPE }
 enum Leg { IN, LOOK, OUT }
 
 @export var prologue_time: float = 25.0
+## A second try (caught in the opening): seconds from the start to the
+## flare - the black lifts (1.5 s), then a breath. No sepia.
+@export var again_time: float = 2.0
 ## Seconds between the knock and the kick: the time to hide.
 @export var warning_time: float = 12.0
 ## Seconds the soldier stands in the izba after walking the search points.
@@ -87,11 +90,13 @@ func _ready() -> void:
 	door.opened.connect(_on_door_opened)
 
 
-## Called by the level once everything is in the tree.
-func start() -> void:
+## Called by the level once everything is in the tree. `again`: caught in
+## the opening, he starts it again - the izba already in black and white,
+## again_time to the flare (docs/ARCHITECTURE.md, "Сцена «Вторжение»", 8).
+func start(again := false) -> void:
 	flare.autofire = false
 	door.enemies_can_open = false
-	prologue_zone.set_active(true)
+	prologue_zone.set_active(not again)
 	for e in get_tree().get_nodes_in_group("enemies"):
 		if e != soldier and e != dog:
 			_others.append(e as Enemy)
@@ -102,7 +107,7 @@ func start() -> void:
 	soldier._post = soldier.global_transform
 	_set_present(soldier, false)
 	_set_present(dog, false)
-	_set_beat(Beat.PROLOGUE, prologue_time)
+	_set_beat(Beat.PROLOGUE, again_time if again else prologue_time)
 
 
 ## The state right after the invasion: door broken in, patrols walking.

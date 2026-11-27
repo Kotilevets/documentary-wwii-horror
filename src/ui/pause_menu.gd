@@ -105,7 +105,9 @@ func to_main_menu() -> void:
 
 func _leave() -> void:
 	# Leaving on the black after a capture or a mine: that reload, which
-	# would have gone back to the checkpoint, is not coming.
+	# would have gone back to the checkpoint (or started the opening again
+	# from its turn), is not coming.
+	LevelBase._retry_opening = false
 	LevelBase._resume_after_intro = false
 	is_open = false
 	_root.visible = false

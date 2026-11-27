@@ -20,8 +20,15 @@ func _start_story(full: bool) -> void:
 				invasion.linger_time *= k
 				invasion.look_back_time *= k
 				invasion.sniff_every *= k
+				invasion.again_time *= k
 		invasion.beat_changed.connect(_on_invasion_beat)
-		invasion.start()
+		invasion.start(again)
+		if again:
+			# Caught in the opening: from the flare, the black lifting as at a
+			# checkpoint (docs/ARCHITECTURE.md, "Сцена «Вторжение»", 8).
+			fade_from_black()
+			if not Player.is_scripted_run():
+				GameState.log_line("act1 again from the flare")
 	else:
 		invasion.skip()
 		gunfire.active = true
@@ -38,3 +45,10 @@ func _on_invasion_beat(b: InvasionSequence.Beat) -> void:
 ## Caught after the squad has left: the reload skips the opening.
 func _resume_checkpoint() -> bool:
 	return invasion.beat == InvasionSequence.Beat.ESCAPE
+
+
+## Caught in the opening, from the flare to the look back in: the reload
+## starts it again from the flare, not the prologue (docs/ARCHITECTURE.md,
+## "Сцена «Вторжение»", 8). Before the flare there is nobody to catch him.
+func _retries_opening() -> bool:
+	return invasion.beat != InvasionSequence.Beat.PROLOGUE and invasion.beat != InvasionSequence.Beat.ESCAPE
