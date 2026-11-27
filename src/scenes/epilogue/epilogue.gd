@@ -1,11 +1,14 @@
 extends Control
 ## After Act III: a few lines on black (assets/data/epilogue.json, a draft
 ## - the author writes the epilogue and the dedication), then the Witness
-## Archive count and what was found, then back to the main menu.
+## Archive count and what was found, then back to the main menu. The
+## dedication ("dedication", empty until the author writes it) follows the lines.
 
 const DATA_PATH := "res://assets/data/epilogue.json"
 
 @export var line_time: float = 5.0
+## Tests point this elsewhere.
+var data_path := DATA_PATH
 
 var lines: Array = []
 var data: Dictionary = {}
@@ -22,12 +25,12 @@ func _ready() -> void:
 	if not Player.is_scripted_run():
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
 	GameState.game_finished()
-	var d = JSON.parse_string(FileAccess.get_file_as_string(DATA_PATH))
+	var d = JSON.parse_string(FileAccess.get_file_as_string(data_path))
 	data = d if typeof(d) == TYPE_DICTIONARY else {}
 	lines = data.get("lines", [])
 	_build()
 	var t := create_tween()
-	for l in lines:
+	for l in shown_lines():
 		t.tween_callback(_set_line.bind(str(l)))
 		t.tween_property(_line, "modulate:a", 1.0, 1.2)
 		t.tween_interval(line_time)
@@ -35,6 +38,16 @@ func _ready() -> void:
 	t.tween_callback(show_summary)
 	if OS.get_cmdline_user_args().has("--summary"):
 		show_summary.call_deferred()
+
+
+## The lines, then the dedication if the author has written one; an empty one
+## takes no time and no frame.
+func shown_lines() -> Array:
+	var out := lines.duplicate()
+	var dedication := str(data.get("dedication", "")).strip_edges()
+	if dedication != "":
+		out.append(dedication)
+	return out
 
 
 func _unhandled_input(event: InputEvent) -> void:

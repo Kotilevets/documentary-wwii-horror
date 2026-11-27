@@ -1167,6 +1167,21 @@ func _test_archive() -> void:
 	check(shown.contains("ещё не внесён"), "pending text is shown honestly, not invented")
 	var note := ArchiveUI.render_archive_note(order)
 	check(note.contains("1941") and note.contains("ЧГК"), "archive note includes related references")
+	# A reference no document lists is never shown to the player.
+	for id in ArchiveDB._documents:
+		if ArchiveDB.get_document(id).get("type", "") != "reference":
+			continue
+		var listed := false
+		for other in ArchiveDB._documents:
+			listed = listed or ArchiveDB.get_document(other).get("related", []).has(id)
+		check(listed, "the reference %s is shown in some document's archive note" % id)
+	var village := ArchiveUI.render_archive_note(ArchiveDB.get_document("act2_arbeitsamt_summons"))
+	check(village.contains("Огненные деревни") and village.contains("khatyn.by"),
+			"the summons from the burned village shows the burned villages reference")
+	check(village.contains("• А. Адамович") and not village.contains("[url=]"),
+			"a book without a link is plain text, not an empty link")
+	check(ArchiveUI._render_sources([{"title": "Книга", "url": ""}, {"title": "Сайт", "url": "https://a.b/"}])
+			== "• Книга\n• [url=https://a.b/]Сайт[/url]\n", "sources: a link, or plain text without one")
 
 
 func _hosts_in_historical_archive() -> Array[String]:
@@ -7724,8 +7739,34 @@ func _test_menus() -> void:
 			texts.append((c as Label).text)
 	check(texts.size() == 2 and texts[0].contains("1 из 3"), "the epilogue counts the witness archive", texts)
 	check(ep._to_menu != null and ep._to_menu.has_focus(), "and offers the way back to the menu")
+	check(ep.data.has("dedication") and ep.shown_lines() == ep.lines,
+			"the dedication has its place, and while it is empty nothing is shown for it", ep.shown_lines().size())
+	ep.data["dedication"] = "  x  "
+	check(ep.shown_lines().size() == ep.lines.size() + 1 and ep.shown_lines().back() == "x",
+			"a written dedication follows the lines")
 	ep.queue_free()
 	await frames(2)
+	# Played to its end, ten times faster: the lines, the dedication, then the archive.
+	var probe := "user://test_epilogue.json"
+	_write_file(probe, JSON.stringify({"lines": ["a", "b"], "dedication": "x", "archive_line": "%d / %d"}))
+	var played := EPILOGUE.instantiate()
+	played.data_path = probe
+	played.line_time = 0.05
+	Engine.time_scale = 10.0
+	add_child(played)
+	var seen: Array[String] = []
+	var t0 := Time.get_ticks_msec()
+	while Time.get_ticks_msec() - t0 < 5000 and not played._ended:
+		var now: String = played._line.text
+		if now != "" and (seen.is_empty() or seen.back() != now):
+			seen.append(now)
+		await get_tree().process_frame
+	Engine.time_scale = 1.0
+	check(seen == ["a", "b", "x"] and played._ended, "a written dedication is shown after the lines, then the archive",
+			seen)
+	played.queue_free()
+	await frames(2)
+	_remove_files([probe])
 	GameState.reset()
 
 

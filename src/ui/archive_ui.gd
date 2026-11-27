@@ -130,10 +130,14 @@ static func render_archive_note(doc: Dictionary) -> String:
 	return out
 
 
+## A source with a link is a link; a book without one is plain text (an empty link
+## would open nothing).
 static func _render_sources(sources: Array) -> String:
 	var out := ""
 	for s in sources:
-		out += "• [url=%s]%s[/url]\n" % [s.get("url", ""), s.get("title", s.get("url", ""))]
+		var url := str(s.get("url", ""))
+		var title := str(s.get("title", url))
+		out += ("• [url=%s]%s[/url]\n" % [url, title]) if url != "" else "• %s\n" % title
 	return out
 
 
@@ -224,6 +228,11 @@ func _style_paper_controls(c: Control) -> void:
 		c.add_theme_color_override("font_pressed_color", INK)
 
 
+func _open_link(meta: Variant) -> void:
+	if str(meta) != "":
+		OS.shell_open(str(meta))
+
+
 func _make_text(title: String) -> RichTextLabel:
 	var t := RichTextLabel.new()
 	t.name = title
@@ -231,5 +240,5 @@ func _make_text(title: String) -> RichTextLabel:
 	t.selection_enabled = true
 	t.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	t.add_theme_color_override("default_color", INK)
-	t.meta_clicked.connect(func(meta: Variant) -> void: OS.shell_open(str(meta)))
+	t.meta_clicked.connect(_open_link)
 	return t
