@@ -16,12 +16,12 @@ tester just double-clicks Игра.exe.
     build/wwii-horror-playtest-<date>/
         Игра.exe             Godot_v4.7.2-stable_win64.exe, renamed
         Игра.pck             build/windows/game.pck
-        override.cfg         keeps up to 100 run logs instead of 5
+        override.cfg         keeps up to 100 run logs instead of 5; the build stamp for the run log
         ПРОЧТИ.txt           docs/playtest/README_TESTER.md
         АНКЕТА.txt           docs/playtest/QUESTIONNAIRE.md
         Клавиши.txt          docs/playtest/KEYS.md (open only if stuck: question В24)
         Лицензия Godot.txt   the engine's license, its third-party notices and license texts
-        ВЕРСИЯ.txt           date, engine and pack sizes and SHA-256, test results given
+        ВЕРСИЯ.txt           date, commit, engine and pack sizes and SHA-256, the stamp, test results given
     build/wwii-horror-playtest-<date>.zip
 
 macOS: a file added inside Godot.app breaks Apple's seal on the bundle, so the app is
@@ -68,6 +68,7 @@ Manager instead of the game: the tester's note says what to do then.
 import argparse
 import collections
 import datetime
+import functools
 import gzip
 import hashlib
 import io
@@ -127,6 +128,11 @@ OVERRIDE = """; Playtest build: keep up to {n} run logs (Godot's default is 5),
 [debug]
 
 file_logging/max_log_files={n}
+
+; Which build this is, for the run log ("game: build"; GameState.build_stamp).
+[application]
+
+config/playtest_build="{stamp}"
 """
 
 LICENSE_WIN = """Игра.exe — это официальный движок Godot Engine {ver} (файл {exe}),
@@ -310,8 +316,29 @@ def tester_text(src: pathlib.Path, keep: str, system: str, shown_date: str) -> b
     return crlf_bom(s)
 
 
-def override(logs: str) -> bytes:
-    return OVERRIDE.format(n=MAX_LOGS, logs=logs).replace("\n", "\r\n").encode("ascii")
+@functools.lru_cache(maxsize=None)
+def source_commit() -> str:
+    """The commit the pack's sources are at, +changes if they differ from it (src, assets, project.godot,
+    export_presets.cfg: what the pack is exported from); unknown without git."""
+    try:
+        head = subprocess.run(["git", "-C", str(ROOT), "rev-parse", "--short=7", "HEAD"],
+                              capture_output=True, text=True, check=True).stdout.strip()
+        changed = subprocess.run(["git", "-C", str(ROOT), "status", "--porcelain", "--", "project.godot",
+                                  "export_presets.cfg", "src", "assets"],
+                                 capture_output=True, text=True, check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    return head + ("+changes" if changed else "")
+
+
+def build_stamp(date: str, pck: Pack) -> str:
+    """The build's mark in the run log: ASCII, one line, as in ВЕРСИЯ.txt."""
+    return "%s commit %s pck %d bytes SHA-256 %s" % (date, source_commit(), pck.size, pck.sha[:12])
+
+
+def override(logs: str, date: str, pck: Pack) -> bytes:
+    return OVERRIDE.format(n=MAX_LOGS, logs=logs, stamp=build_stamp(date, pck)).replace("\n", "\r\n") \
+        .encode("ascii")
 
 
 def remove(p: pathlib.Path) -> None:
@@ -388,8 +415,12 @@ def swap_in(pairs: list) -> None:
         shutil.rmtree(old, ignore_errors=True) if old.is_dir() else old.unlink(missing_ok=True)
 
 
-def version_lines(head: list, pck: Pack, checks: list) -> bytes:
+def version_lines(head: list, pck: Pack, checks: list, date: str) -> bytes:
     lines = head + ["%s: %d байт, SHA-256 %s" % (PCK_NAME, pck.size, pck.sha)]
+    commit = source_commit()
+    lines.append("Исходники: коммит %s" % commit.replace("+changes", " и изменения после него")
+                 if commit != "unknown" else "Исходники: коммит неизвестен (нет git)")
+    lines.append("Метка сборки в журнале игры (game: build): " + build_stamp(date, pck))
     if checks:
         lines.append("Проверено перед сборкой: " + "; ".join(checks))
     return crlf_bom("\n".join(lines) + "\n")
@@ -409,7 +440,7 @@ def build_windows(name: str, date: str, pck: Pack, godot: pathlib.Path, signer: 
     (new / PCK_NAME).write_bytes(pck.data)
     if (new / PCK_NAME).stat().st_size != pck.size or sha(new / PCK_NAME) != pck.sha:
         sys.exit(WRITE_FAULT % (new / PCK_NAME))
-    (new / "override.cfg").write_bytes(override(WIN_LOGS))
+    (new / "override.cfg").write_bytes(override(WIN_LOGS, date, pck))
     (new / "Лицензия Godot.txt").write_bytes(crlf_bom(
         LICENSE_WIN.format(ver=GODOT_VERSION, exe=GODOT_EXE)
         + LICENSE_COMMON.format(ver=GODOT_VERSION, src=SOURCE_URL) + "\n" + lic))
@@ -420,7 +451,7 @@ def build_windows(name: str, date: str, pck: Pack, godot: pathlib.Path, signer: 
         "Запуск: %s — официальный Godot %s (%s, подпись %s), переименованный; игра — в %s рядом"
         % (EXE_NAME, GODOT_VERSION, GODOT_EXE, signer, PCK_NAME),
         "%s: %d байт, SHA-256 %s" % (EXE_NAME, godot.stat().st_size, sha(godot)),
-    ], pck, checks))
+    ], pck, checks, date))
 
     z = ROOT / "build" / (name + ".zip")
     tmpz = z.with_name(z.name + ".tmp")
@@ -483,8 +514,8 @@ def build_mac(name: str, date: str, pck: Pack, mac_zip: pathlib.Path, src: zipfi
             "%s: %d байт, SHA-256 %s (совпадает с опубликованным на странице выпуска %s-stable)"
             % (mac_zip.name, mac_zip.stat().st_size, MAC_ZIP_SHA256, GODOT_VERSION),
             "%s: %d байт, SHA-256 %s" % (MAC_BINARY, binary_size, binary_sha),
-        ], pck, checks)),
-        MAC_DIR + "/override.cfg": (0o100644, override(MAC_LOGS)),
+        ], pck, checks, date)),
+        MAC_DIR + "/override.cfg": (0o100644, override(MAC_LOGS, date, pck)),
     }
     for dst, data in texts:
         own[dst] = (0o100644, data)
@@ -587,7 +618,7 @@ def build_linux(name: str, date: str, pck: Pack, linux_zip: pathlib.Path, src: z
     tmpt = t.with_name(t.name + ".tmp")
     mtime = int(time.time())
     own = {  # path in the build -> bytes, mode 0644
-        "override.cfg": override(LINUX_LOGS),
+        "override.cfg": override(LINUX_LOGS, date, pck),
         "Лицензия Godot.txt": crlf_bom(
             LICENSE_LINUX.format(ver=GODOT_VERSION, binary=LINUX_BINARY, zip=linux_zip.name)
             + LICENSE_COMMON.format(ver=GODOT_VERSION, src=SOURCE_URL) + "\n" + lic),
@@ -598,7 +629,7 @@ def build_linux(name: str, date: str, pck: Pack, linux_zip: pathlib.Path, src: z
             "%s: %d байт, SHA-256 %s (совпадает с опубликованным на странице выпуска %s-stable)"
             % (linux_zip.name, linux_zip.stat().st_size, LINUX_ZIP_SHA256, GODOT_VERSION),
             "%s: %d байт, SHA-256 %s" % (LINUX_EXE, binary_size, binary_sha),
-        ], pck, checks),
+        ], pck, checks, date),
     }
     for dst, data in texts:
         own[dst] = data

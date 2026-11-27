@@ -117,6 +117,8 @@ func _run() -> void:
 	await _group(_test_briefing_legend)
 	await _group(_test_act3_arrests)
 	await _group(_test_game_state)
+	await _group(_test_run_log)
+	await _group(_test_progress_file)
 	await _group(_test_menus)
 	await _group(_test_controls)
 	await _group(_test_brightness)
@@ -7506,6 +7508,134 @@ func _test_game_state() -> void:
 	p.queue_free()
 	await frames(2)
 	GameState.reset()
+
+
+const FRAME_STATS := preload("res://src/core/frame_stats.gd")
+
+
+## The marks in the run log (docs/ARCHITECTURE.md, "Метки в журнале запуска"): the build
+## stamp and the frames of a part of the game.
+func _test_run_log() -> void:
+	check(GameState.build_stamp() == "sources", "a run from the sources is stamped sources", GameState.build_stamp())
+	var stamp := "2026-11-27 commit 09af45f pck 10128832 bytes SHA-256 0123456789ab"
+	ProjectSettings.set_setting(GameState.BUILD_SETTING, stamp)
+	check(GameState.build_stamp() == stamp, "a playtest build is stamped from its override.cfg", GameState.build_stamp())
+	ProjectSettings.set_setting(GameState.BUILD_SETTING, null)
+	check(GameState.build_stamp() == "sources", "without the setting the stamp is sources again")
+	var fs = FRAME_STATS.new()
+	check(fs.summary() == "0 frames, median 0.0 ms, 95% 0.0 ms, worst 0.0 ms", "no frames: zeros", fs.summary())
+	for i in 100:
+		fs.add(16.6)
+	for i in 5:
+		fs.add(40.0)
+	check(fs.count == 105 and absf(fs.percentile(0.5) - 16.6) <= 0.125 and absf(fs.percentile(0.95) - 16.6) <= 0.125,
+			"the median and the 95th percentile, to the bin (0.25 ms)", [fs.percentile(0.5), fs.percentile(0.95)])
+	check(is_equal_approx(fs.percentile(0.99), 40.0) and is_equal_approx(fs.worst, 40.0),
+			"a percentile is never above the worst frame", [fs.percentile(0.99), fs.worst])
+	fs.add(750.0)
+	check(is_equal_approx(fs.worst, 750.0) and is_equal_approx(fs.percentile(1.0), 750.0),
+			"a frame past 200 ms: the worst exactly, and the last bin reads it", [fs.worst, fs.percentile(1.0)])
+	check(fs.summary() == "106 frames, median 16.6 ms, 95% 40.1 ms, worst 750.0 ms", "the frames summary", fs.summary())
+	# GameState counts by the real clock from start_frames to take_frames; log_scene does
+	# not start it in a headless run.
+	GameState.log_scene(self)
+	for i in 6:
+		await get_tree().process_frame
+	check(GameState.take_frames() == "", "a headless run counts no frames of its scenes")
+	GameState.start_frames("probe")
+	check(GameState.take_frames() == "", "no frame counted yet: no line")
+	GameState.start_frames("probe")
+	for i in 8:
+		await get_tree().process_frame
+	var line := GameState.take_frames()
+	check(line.begins_with("frames probe ") and line.contains(" frames, median "), "the frames line names the part", line)
+	var n := int(line.trim_prefix("frames probe ").get_slice(" ", 0))
+	check(n >= 7 - GameState.FRAMES_SKIPPED - 1 and n <= 8 - GameState.FRAMES_SKIPPED - 1,
+			"the frame that sets the clock and the two of the loading are not counted", n)
+	check(GameState.take_frames() == "", "the counting stops with its line")
+
+
+## progress.json: written through .tmp, the file before the last save kept as .bak, an
+## unreadable file put aside as .broken, the format version (docs/ARCHITECTURE.md, "Прогресс").
+func _test_progress_file() -> void:
+	var path := GameState.save_path
+	check(path != GameState.SAVE_PATH, "the tests write their own progress file", path)
+	GameState.save_path = GameState.SAVE_PATH
+	check(GameState._real_file_kept(), "a headless run neither writes nor puts aside the player's own file")
+	GameState.save_path = path
+	var files := [path, path + ".tmp", path + ".bak", path + ".broken"]
+	_remove_files(files)
+	GameState.load_progress()
+	check(GameState.loaded_from == "" and GameState.reached == 1, "no file: a new game")
+	GameState.act_started(GameState.ACTS[1].scene)
+	var first := FileAccess.get_file_as_string(path)
+	var d = JSON.parse_string(first)
+	check(typeof(d) == TYPE_DICTIONARY and int(d.get("version", -1)) == GameState.FORMAT_VERSION,
+			"the file carries its format version", first.left(60))
+	check(not FileAccess.file_exists(path + ".tmp"), "a save leaves no temporary file behind")
+	GameState.set_setting("volume", 0.5)
+	check(FileAccess.get_file_as_string(path + ".bak") == first, "the file before the last save is kept as .bak")
+	var good := FileAccess.get_file_as_string(path)
+	GameState.set_setting("volume", 0.6)
+	check(FileAccess.get_file_as_string(path + ".bak") == good, "an old .bak gives way to the next one")
+	# A write cut short, a failing disk: an empty file, one cut in the middle, not an object.
+	for bad in ["", first.left(40), "[1, 2]"]:
+		_write_file(path, bad)
+		GameState.load_progress()
+		check(GameState.loaded_from == path.get_file() + ".bak" and GameState.reached == 2
+				and is_equal_approx(float(GameState.settings["volume"]), 0.5),
+				"an unreadable file (%d bytes): the progress is read from .bak" % bad.length(), GameState.loaded_from)
+		check(not FileAccess.file_exists(path) and FileAccess.get_file_as_string(path + ".broken") == bad,
+				"and the unreadable file is put aside as .broken, not wiped (%d bytes)" % bad.length())
+	GameState.save()
+	check(FileAccess.get_file_as_string(path + ".bak") == good and typeof(GameState.read_progress(path)) == TYPE_DICTIONARY,
+			"the next save writes the file anew and leaves the good .bak alone")
+	_remove_files(files)
+	_write_file(path, "{\"reached\": 3")
+	GameState.load_progress()
+	check(GameState.loaded_from == "" and GameState.reached == 1 and FileAccess.file_exists(path + ".broken"),
+			"unreadable and no copy: a new game, and the file is kept as .broken")
+	_remove_files(files)
+	_write_file(path + ".bak", JSON.stringify({"version": 1, "reached": 2}))
+	_write_file(path + ".tmp", JSON.stringify({"version": 1, "reached": 3}))
+	GameState.load_progress()
+	check(GameState.loaded_from == path.get_file() + ".tmp" and GameState.reached == 3,
+			"no file, but a .tmp the last save could not move into place: it is read before .bak", GameState.loaded_from)
+	_remove_files(files)
+	_write_file(path, JSON.stringify({"reached": 2, "last_act": 1, "finished": false, "archive": ["a"],
+			"settings": {"volume": 0.3}}))
+	GameState.load_progress()
+	check(GameState.loaded_from == path.get_file() and GameState.reached == 2 and GameState.last_act == 1
+			and GameState.archive == ["a"] and is_equal_approx(float(GameState.settings["volume"]), 0.3),
+			"a file without the version (before 27.11.2026) is read as it is")
+	GameState.save()
+	check(int(GameState.read_progress(path).get("version", -1)) == GameState.FORMAT_VERSION,
+			"and is written back with the version")
+	var newer := JSON.stringify({"version": GameState.FORMAT_VERSION + 1, "reached": 3, "later": true})
+	_write_file(path, newer)
+	GameState.load_progress()
+	check(GameState.reached == 3, "a file of a newer format is read as far as this build knows it")
+	GameState.set_setting("volume", 0.9)
+	GameState.act_started(GameState.ACTS[0].scene)
+	check(FileAccess.get_file_as_string(path) == newer and not FileAccess.file_exists(path + ".tmp"),
+			"and is not overwritten: an older build does not wipe what it cannot read")
+	_remove_files(files)
+	GameState.load_progress()
+	check(GameState.loaded_from == "" and GameState._no_save == "", "the next load forgets that guard")
+	GameState.reset()
+	GameState.apply_settings()
+
+
+func _write_file(path: String, text: String) -> void:
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(text)
+	f.close()
+
+
+func _remove_files(paths: Array) -> void:
+	for p in paths:
+		if FileAccess.file_exists(p):
+			DirAccess.remove_absolute(p)
 
 
 func _test_menus() -> void:
