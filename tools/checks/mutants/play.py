@@ -25,6 +25,10 @@ P69u-P84u 20.11; P60u, P64u and P100u-P125 20.11 (the last, play/mutations_summa
 survive (docs): P48 and P55 (their act3 run; P48u and P55u catch them), P61, P62, P63 (the shoulders decide nothing
 on today's routes), P92.
 
+Run in full on 26-27.11.2026 (about five hours): 121 of 129 caught, the six above KNOWN, P5 and P53 SURVIVED. P5 on gap is
+equivalent (no beam meets him there even when he never waits): its run is camp now. P53: the whole act met the patrol at
+the drums by its timing only; the act3 part gained _act3_patrol. Both caught since (27.11): 123 of 129.
+
 Lost ids: none. Every id with an old log (play/mut_P69u.log to mut_P125.log) and every id the docs name is here;
 P97-P99 were never used (no log, script or doc names them)."""
 
@@ -38,6 +42,7 @@ RUN = UNIT
 PLAY = {
     'act1': {'args': ['res://tests/playthrough_runner.tscn', '--', '--only=act1'], 'timeout': 1500},
     'act3': {'args': ['res://tests/playthrough_runner.tscn', '--', '--only=act3'], 'timeout': 1500},
+    'camp': {'args': ['res://tests/playthrough_runner.tscn', '--', '--only=camp'], 'timeout': 1500},
     'cellar': {'args': ['res://tests/playthrough_runner.tscn', '--', '--only=cellar'], 'timeout': 1500},
     'door': {'args': ['res://tests/playthrough_runner.tscn', '--', '--only=door'], 'timeout': 1500},
     'ears': {'args': ['res://tests/playthrough_runner.tscn', '--', '--only=ears'], 'timeout': 1500},
@@ -68,7 +73,8 @@ MUTANTS = [
      "run": PLAY['light']},
     {"name": 'P5 bot never waits for the beam',
      "edits": [('tests/act2_bot.gd', 'func lit_at(c: Vector2i, posture: int, t: float) -> bool:\n\tif not inside(c):', 'func lit_at(c: Vector2i, posture: int, t: float) -> bool:\n\tif true or not inside(c):')],
-     "run": PLAY['gap']},
+     "run": PLAY['camp'],
+     "note": 'run moved from gap to camp on 27.11.2026: on the gap route (from the field, bandaged) no beam meets him even when he never waits, the mutant ran green; camp (back at the camp bleeding) catches it, the beam on him 0.67, and so does whole'},
     {"name": 'P6 bot ignores the guard',
      "edits": [('tests/act2_bot.gd', 'func danger(w: Watcher, p: Vector3, pose: Array, posture: int, moving := false) -> bool:\n', 'func danger(w: Watcher, p: Vector3, pose: Array, posture: int, moving := false) -> bool:\n\tif w.dog != null: return false\n')],
      "run": PLAY['road'],
@@ -225,7 +231,8 @@ MUTANTS = [
      "run": PLAY['act3']},
     {"name": 'P53 the bot forgets the street patrol',
      "edits": [('tests/act3_bot.gd', '\t\tif _is_patrol(en):\n\t\t\tif far > en.view_distance + PATROL_RANGE:\n', '\t\tif _is_patrol(en):\n\t\t\tcontinue\n\t\t\tif far > en.view_distance + PATROL_RANGE:\n')],
-     "run": PLAY['act3']},
+     "run": PLAY['act3'],
+     "note": 'the whole act caught it on 19.11.2026 by its timing; on 27.11 it no longer met the patrol at the drums while he stared (the mutant ran green), so the act3 part gained the run «the patrol walks up to his place» (_act3_patrol)'},
     {"name": 'P54 the bot forgets the guards on their posts',
      "edits": [('tests/act3_bot.gd', 'func _cone_sees(en: Enemy, head: Vector3, extra: float) -> bool:\n', 'func _cone_sees(en: Enemy, head: Vector3, extra: float) -> bool:\n\treturn false\n')],
      "run": PLAY['act3']},

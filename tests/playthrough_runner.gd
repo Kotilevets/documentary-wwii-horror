@@ -39,9 +39,13 @@ const ACT3_PATH := "res://src/scenes/act3_garrison/act3_garrison.tscn"
 const ACT3_SCRIPT := preload("res://src/scenes/act3_garrison/act3_garrison.gd")
 const Courier := preload("res://tests/act3_bot.gd")
 ## Act III: in the forest zone past the exit gate (ForestEdge, z -125..-119);
-## where he stands on the street to stare at the trucks (the eyes control).
+## where he stands on the street to stare at the trucks (the eyes control);
+## his place for the drums in the whole act, and where the patrol is put
+## walking south up the street to it, the place before his eyes.
 const ACT3_FOREST := Vector3(0, 0, -122.5)
 const ACT3_IN_SIGHT := Vector3(0, 0, -64)
+const ACT3_DRUMS_AT := Vector3(8.5, 0, -64)
+const ACT3_PATROL_UP := Vector3(1.5, 0, -76)
 ## Where the hider stands to take the things from the table (Act I izba), and
 ## the way he crouches to each hiding place: to the cellar (south of the hatch
 ## at -0.6, 5.4, between it and the table; -Z is north), and behind the stove
@@ -187,6 +191,7 @@ func _run() -> void:
 	if _part("act3"):
 		await _act3()
 		await _act3_eyes()
+		await _act3_patrol()
 	if OS.get_cmdline_user_args().has("--map"):
 		_draw_map()
 		_draw_escape_map()
@@ -1532,4 +1537,42 @@ func _act3_eyes() -> void:
 			float(bot.peak.get("StreetPatrol", 0.0))])
 	check(turned and bot.staring_seen > 0 and bot.failed.contains("turned") and not left_paused,
 			"act3, control: staring at the trucks in the patrol's sight - the patrol turns", [bot.failed, bot.peak])
+	await _act3_close(lv, bot)
+
+
+## The careful runner at his place for the drums while the patrol walks up
+## the street to it, the place before his eyes (docs/ARCHITECTURE.md,
+## "Проходимость Акта III", «Прогон «патрульный идёт к нему»»). The whole
+## act meets the patrol there only by its timing.
+func _act3_patrol() -> void:
+	var lv := await _act3_level(false)
+	var bot := Courier.new()
+	bot.setup(lv)
+	lv._debug_arg("garrison", "")
+	var drums := lv.get_node("Scout/Drums") as GazeTarget
+	var patrol := lv.get_node("StreetPatrol") as Enemy
+	bot.player.global_position = ACT3_DRUMS_AT
+	# On his way back to the first point of his round, facing it.
+	patrol.global_position = ACT3_PATROL_UP
+	patrol.rotation.y = PI
+	patrol._route_idx = 0
+	patrol._wait = 0.0
+	await frames(2)
+	var eyes := patrol.sight_distance()
+	Engine.time_scale = SPEED
+	await bot.scout(drums, 60.0)
+	var sc: Array = bot.scouting.get("Drums", [])
+	var down := int(sc[2]) if sc.size() > 2 else -1
+	var saw := int(bot.seen_frames.get("StreetPatrol", 0))
+	var left_paused := get_tree().paused
+	print("\n--- act3: the patrol walks up the street to his place ---")
+	for e in bot.events:
+		print("  ", e)
+	print("  the patrol's eyes reach %.1f m; he saw him %d frames; eyes down %d frames; staring %d frames, under eyes %d (first: %s); patrol peak %.2f"
+			% [eyes, saw, down, bot.staring_frames, bot.staring_seen, bot.first_seen_staring,
+			float(bot.peak.get("StreetPatrol", 0.0))])
+	check(bot.failed == "" and drums.done and saw > 0 and down > 0 and bot.staring_frames > 0
+			and bot.staring_seen == 0 and float(bot.peak.get("StreetPatrol", 0.0)) == 0.0 and not left_paused,
+			"act3, the patrol walks up the street to his place: eyes down while he sees him, then the drums",
+			[bot.failed, saw, down, bot.staring_seen, bot.first_seen_staring, bot.peak])
 	await _act3_close(lv, bot)

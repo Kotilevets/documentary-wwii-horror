@@ -55,6 +55,8 @@ var worst: Dictionary = {}
 ## when an enemy saw him (Enemy.can_see): the bot's model against the game.
 var staring_frames := 0
 var staring_seen := 0
+## Frames each enemy saw him (Enemy.can_see), staring or not.
+var seen_frames: Dictionary = {}
 var first_seen_staring := ""
 var restricted_frames := 0
 var briefing_seen: Array[String] = []
@@ -149,8 +151,10 @@ func _watch() -> void:
 					_v(player.global_position)])
 			if stop_when_turned:
 				_fail("%s turned" % key)
-		if seen_by == "" and en.can_see(player):
-			seen_by = key
+		if en.can_see(player):
+			seen_frames[key] = int(seen_frames.get(key, 0)) + 1
+			if seen_by == "":
+				seen_by = key
 	if Stealth.staring:
 		staring_frames += 1
 		if seen_by != "":
